@@ -1,0 +1,106 @@
+{
+  "id": "2026-03-07-sb",
+  "date": "2026-03-07",
+  "leagueId": "saturday-b",
+  "leagueNumber": 1,
+  "year": 2026,
+  "teams": [
+    { "id": "team1", "color": "black", "players": ["p101", "p102", "p103", "p104", "p105", "p106"] },
+    { "id": "team2", "color": "yellow", "players": ["p107", "p108", "p109", "p110", "p111", "p112", "p113"] },
+    { "id": "team3", "color": "pink", "players": ["p114", "p115", "p116", "p117", "p118", "p119", "p120"] }
+  ],
+  "games": [
+    {
+      "id": "sb1-g1",
+      "round": 1,
+      "teamA": "team1",
+      "teamB": "team2",
+      "score": { "a": 2, "b": 1 },
+      "events": [
+        { "type": "goal", "scorer": "p101", "assister": "p104" },
+        { "type": "goal", "scorer": "p103", "assister": "p102" },
+        { "type": "goal", "scorer": "p108", "assister": "p111" }
+      ]
+    },
+    {
+      "id": "sb1-g2",
+      "round": 1,
+      "teamA": "team3",
+      "teamB": "team1",
+      "score": { "a": 1, "b": 1 },
+      "events": [
+        { "type": "goal", "scorer": "p114", "assister": "p118" },
+        { "type": "goal", "scorer": "p106", "assister": "p101" }
+      ]
+    },
+    {
+      "id": "sb1-g3",
+      "round": 2,
+      "teamA": "team2",
+      "teamB": "team3",
+      "score": { "a": 3, "b": 0 },
+      "events": [
+        { "type": "goal", "scorer": "p107", "assister": "p110" },
+        { "type": "goal", "scorer": "p109", "assister": "p108" },
+        { "type": "goal", "scorer": "p112", "assister": "p113" }
+      ]
+    },
+    {
+      "id": "sb1-g4",
+      "round": 2,
+      "teamA": "team1",
+      "teamB": "team2",
+      "score": { "a": 1, "b": 0 },
+      "events": [
+        { "type": "goal", "scorer": "p105", "assister": "p101" }
+      ]
+    },
+    {
+      "id": "sb1-g5",
+      "round": 3,
+      "teamA": "team3",
+      "teamB": "team2",
+      "score": { "a": 2, "b": 2 },
+      "events": [
+        { "type": "goal", "scorer": "p115", "assister": "p119" },
+        { "type": "goal", "scorer": "p117", "assister": "p114" },
+        { "type": "goal", "scorer": "p108", "assister": "p107" },
+        { "type": "goal", "scorer": "p110", "assister": "p112" }
+      ]
+    },
+    {
+      "id": "sb1-g6",
+      "round": 3,
+      "teamA": "team1",
+      "teamB": "team3",
+      "score": { "a": 2, "b": 0 },
+      "events": [
+        { "type": "goal", "scorer": "p101", "assister": "p106" },
+        { "type": "goal", "scorer": "p104", "assister": "p103" }
+      ]
+    },
+    {
+      "id": "sb1-g7",
+      "round": 4,
+      "teamA": "team2",
+      "teamB": "team1",
+      "score": { "a": 1, "b": 2 },
+      "events": [
+        { "type": "goal", "scorer": "p111", "assister": "p107" },
+        { "type": "goal", "scorer": "p102", "assister": "p104" },
+        { "type": "goal", "scorer": "p106", "assister": "p105" }
+      ]
+    },
+    {
+      "id": "sb1-g8",
+      "round": 4,
+      "teamA": "team3",
+      "teamB": "team2",
+      "score": { "a": 1, "b": 1 },
+      "events": [
+        { "type": "goal", "scorer": "p118", "assister": "p120" },
+        { "type": "goal", "scorer": "p109", "assister": "p110" }
+      ]
+    }
+  ]
+}
