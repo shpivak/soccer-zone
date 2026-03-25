@@ -5,13 +5,13 @@ export const APP_CONFIG = {
   minPlayersPerTeam: 5,
   maxPlayersPerTeam: 7,
   roundsPerTournament: 4,
-  gamesPerRound: 2,
-  gamesPerTournament: 8,
+  gamesPerRound: 3,
+  gamesPerTournament: 12,
   leagueName: 'Soccer Zone',
   leagues: [
     { id: 'friday-noon', name: 'שישי בצהריים' },
-    { id: 'saturday-a', name: 'שבת א׳' },
-    { id: 'saturday-b', name: 'שבת ב׳' },
+    { id: 'saturday-a', name: 'שבת A' },
+    { id: 'saturday-b', name: 'שבת B' },
   ],
   points: {
     win: 3,

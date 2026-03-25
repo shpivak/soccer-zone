@@ -10,7 +10,7 @@ const colorTitle = {
   gray: 'אפור',
 }
 
-const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit }) => {
+const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit, message }) => {
   const [teamA, setTeamA] = useState(editingGame?.teamA ?? teams[0]?.id ?? '')
   const [teamB, setTeamB] = useState(editingGame?.teamB ?? teams[1]?.id ?? '')
   const [scoreA, setScoreA] = useState(editingGame?.score.a ?? 0)
@@ -160,6 +160,12 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
           ))}
         </div>
       )}
+
+      {message ? (
+        <p data-testid="game-input-message" className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {message}
+        </p>
+      ) : null}
 
       <div className="mt-4 flex gap-2">
         <button

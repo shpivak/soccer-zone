@@ -24,6 +24,7 @@ const LiveTournament = ({ adminMode }) => {
   const [editingGame, setEditingGame] = useState(null)
   const [newPlayerName, setNewPlayerName] = useState('')
   const [teamBuilderMessage, setTeamBuilderMessage] = useState('')
+  const [gameInputMessage, setGameInputMessage] = useState('')
 
   const standings = useMemo(() => {
     if (!selectedTournament) return []
@@ -42,6 +43,7 @@ const LiveTournament = ({ adminMode }) => {
 
   const handleCreateTournament = () => {
     if (!adminMode) return
+    setGameInputMessage('')
     const tournament = createTournament()
     setTournaments((current) => [...current, tournament])
     setSelectedTournamentId(tournament.id)
@@ -74,12 +76,14 @@ const LiveTournament = ({ adminMode }) => {
 
   const handleSaveGame = (game) => {
     if (!adminMode || !selectedTournament) return
+    setGameInputMessage('')
     updateSelectedTournament((tournament) => {
       const exists = tournament.games.some((item) => item.id === game.id)
       if (exists) {
         return { games: tournament.games.map((item) => (item.id === game.id ? game : item)) }
       }
       if (tournament.games.length >= APP_CONFIG.gamesPerTournament) {
+        setGameInputMessage(`אי אפשר להוסיף יותר מ-${APP_CONFIG.gamesPerTournament} משחקים לטורניר.`)
         return { games: tournament.games }
       }
       return { games: [...tournament.games, { ...game, round: tournament.games.length + 1 }] }
@@ -89,6 +93,7 @@ const LiveTournament = ({ adminMode }) => {
 
   const handleDeleteGame = (gameId) => {
     if (!adminMode || !selectedTournament) return
+    setGameInputMessage('')
     updateSelectedTournament((tournament) => ({
       games: tournament.games.filter((game) => game.id !== gameId),
     }))
@@ -96,6 +101,7 @@ const LiveTournament = ({ adminMode }) => {
 
   const handleUndoLastGame = () => {
     if (!adminMode || !selectedTournament) return
+    setGameInputMessage('')
     updateSelectedTournament((tournament) => ({
       games: tournament.games.slice(0, -1),
     }))
@@ -104,6 +110,7 @@ const LiveTournament = ({ adminMode }) => {
   const handleChangeTeamColor = (teamId, color) => {
     if (!adminMode || !selectedTournament) return
     setTeamBuilderMessage('')
+    setGameInputMessage('')
     updateSelectedTournament((tournament) => ({
       teams: tournament.teams.map((team) => (team.id === teamId ? { ...team, color } : team)),
     }))
@@ -216,6 +223,7 @@ const LiveTournament = ({ adminMode }) => {
         onSave={handleSaveGame}
         editingGame={editingGame}
         onCancelEdit={() => setEditingGame(null)}
+        message={gameInputMessage}
       />
 
       <ScoreBoard standings={standings} />

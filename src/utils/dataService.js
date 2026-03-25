@@ -1,18 +1,18 @@
-import defaultPlayers from '../../mock_data/players.json'
-import tournamentOne from '../../mock_data/tournaments/tournament-1.json'
-import tournamentTwo from '../../mock_data/tournaments/tournament-2.json'
-import tournamentThree from '../../mock_data/tournaments/tournament-3.json'
-import tournamentFour from '../../mock_data/tournaments/tournament-4.json'
-import tournamentFive from '../../mock_data/tournaments/tournament-5.json'
 import { APP_CONFIG } from '../config'
+import { defaultPlayers, defaultTournaments } from './defaultData'
+import { loadDatasetFromSupabase, resetSupabaseDataset, savePlayersToSupabase, saveTournamentsToSupabase } from './supabaseRest'
+import {
+  AVAILABLE_DATASETS,
+  canResetDataset,
+  DEFAULT_DATASET,
+  isSupabaseConfigured,
+  resolveDataset,
+} from './storageConfig'
 
 const ACTIVE_DATASET_KEY = 'soccer-zone-active-dataset'
 const ACTIVE_LEAGUE_KEY = 'soccer-zone-active-league'
 const LEGACY_PLAYERS_KEY = 'soccer-zone-players'
 const LEGACY_TOURNAMENTS_KEY = 'soccer-zone-tournaments'
-
-const defaultTournaments = [tournamentOne, tournamentTwo, tournamentThree, tournamentFour, tournamentFive]
-const DATASETS = ['test', 'current', 'prod']
 
 const safeParse = (value, fallback) => {
   try {
@@ -72,11 +72,11 @@ const defaultDataByDataset = (dataset) => {
 
 export const getActiveDataset = () => {
   const dataset = localStorage.getItem(ACTIVE_DATASET_KEY)
-  return DATASETS.includes(dataset) ? dataset : 'test'
+  return AVAILABLE_DATASETS.includes(dataset) ? dataset : DEFAULT_DATASET
 }
 
 export const setActiveDataset = (dataset) => {
-  localStorage.setItem(ACTIVE_DATASET_KEY, dataset)
+  localStorage.setItem(ACTIVE_DATASET_KEY, resolveDataset(dataset))
 }
 
 export const getActiveLeague = () => {
@@ -88,17 +88,23 @@ export const setActiveLeague = (leagueId) => {
   localStorage.setItem(ACTIVE_LEAGUE_KEY, leagueId)
 }
 
-export const loadDatasetData = (dataset) => {
+const normalizeLoadedData = (dataset, data) => ({
+  players: data.players.map(migratePlayer),
+  tournaments: data.tournaments.map(migrateTournament),
+})
+
+const loadDatasetDataFromLocal = (dataset) => {
   const defaults = defaultDataByDataset(dataset)
-  const { playersKey, tournamentsKey } = getStorageKeys(dataset)
+  const resolvedDataset = resolveDataset(dataset)
+  const { playersKey, tournamentsKey } = getStorageKeys(resolvedDataset)
   const storedPlayers = localStorage.getItem(playersKey)
   const storedTournaments = localStorage.getItem(tournamentsKey)
 
   const legacyPlayers = localStorage.getItem(LEGACY_PLAYERS_KEY)
   const legacyTournaments = localStorage.getItem(LEGACY_TOURNAMENTS_KEY)
 
-  const playersSource = storedPlayers ?? (dataset === 'current' ? legacyPlayers : null)
-  const tournamentsSource = storedTournaments ?? (dataset === 'current' ? legacyTournaments : null)
+  const playersSource = storedPlayers ?? legacyPlayers
+  const tournamentsSource = storedTournaments ?? legacyTournaments
 
   const parsedPlayers = playersSource ? safeParse(playersSource, defaults.players) : defaults.players
   const parsedTournaments = storedTournaments
@@ -107,32 +113,66 @@ export const loadDatasetData = (dataset) => {
       ? safeParse(tournamentsSource, defaults.tournaments)
       : defaults.tournaments
 
-  return {
-    players: (dataset === 'prod' ? parsedPlayers : mergePlayers(parsedPlayers)).map(migratePlayer),
-    tournaments: (dataset === 'prod' ? parsedTournaments : mergeTournaments(parsedTournaments)).map(
-      migrateTournament,
-    ),
-  }
+  return normalizeLoadedData(resolvedDataset, {
+    players: resolvedDataset === 'prod' ? parsedPlayers : mergePlayers(parsedPlayers),
+    tournaments: resolvedDataset === 'prod' ? parsedTournaments : mergeTournaments(parsedTournaments),
+  })
 }
 
-export const savePlayers = (dataset, players) => {
-  const { playersKey } = getStorageKeys(dataset)
-  // FUTURE: replace localStorage with Supabase
-  // FUTURE: replace with Supabase:
-  // supabase.from('players').upsert(players)
+export const loadDatasetData = async (dataset) => {
+  const resolvedDataset = resolveDataset(dataset)
+  if (isSupabaseConfigured()) {
+    const data = await loadDatasetFromSupabase(resolvedDataset)
+    return normalizeLoadedData(resolvedDataset, data)
+  }
+
+  return loadDatasetDataFromLocal(resolvedDataset)
+}
+
+const savePlayersToLocal = (dataset, players) => {
+  const { playersKey } = getStorageKeys(resolveDataset(dataset))
   localStorage.setItem(playersKey, JSON.stringify(players))
 }
 
-export const saveTournaments = (dataset, tournaments) => {
-  const { tournamentsKey } = getStorageKeys(dataset)
-  // FUTURE: replace localStorage with Supabase
-  // FUTURE: replace with Supabase:
-  // supabase.from('tournaments').upsert(tournaments)
+const saveTournamentsToLocal = (dataset, tournaments) => {
+  const { tournamentsKey } = getStorageKeys(resolveDataset(dataset))
   localStorage.setItem(tournamentsKey, JSON.stringify(tournaments))
 }
 
-export const resetDatasetData = (dataset) => {
-  const defaults = defaultDataByDataset(dataset)
-  savePlayers(dataset, defaults.players)
-  saveTournaments(dataset, defaults.tournaments)
+export const savePlayers = async (dataset, players) => {
+  const resolvedDataset = resolveDataset(dataset)
+  if (isSupabaseConfigured()) {
+    await savePlayersToSupabase(resolvedDataset, players)
+    return
+  }
+
+  savePlayersToLocal(resolvedDataset, players)
+}
+
+export const saveTournaments = async (dataset, tournaments) => {
+  const resolvedDataset = resolveDataset(dataset)
+  if (isSupabaseConfigured()) {
+    await saveTournamentsToSupabase(resolvedDataset, tournaments)
+    return
+  }
+
+  saveTournamentsToLocal(resolvedDataset, tournaments)
+}
+
+export const isResetAllowed = (dataset) => canResetDataset(resolveDataset(dataset))
+
+export const resetDatasetData = async (dataset) => {
+  const resolvedDataset = resolveDataset(dataset)
+  if (!isResetAllowed(resolvedDataset)) {
+    throw new Error(`Reset is disabled for dataset "${resolvedDataset}"`)
+  }
+
+  if (isSupabaseConfigured()) {
+    await resetSupabaseDataset(resolvedDataset)
+    return
+  }
+
+  const defaults = defaultDataByDataset(resolvedDataset)
+  savePlayersToLocal(resolvedDataset, defaults.players)
+  saveTournamentsToLocal(resolvedDataset, defaults.tournaments)
 }
