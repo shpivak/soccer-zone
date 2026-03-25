@@ -2,6 +2,15 @@
 
 Small React app for managing an amateur soccer training league.
 
+## Storage
+
+The app now supports two storage modes:
+
+- `supabase`: the app reads and writes directly to Supabase REST from the browser
+- `local`: fallback mode for local development before credentials are configured
+
+Supabase is the intended primary path. The old `mock_data/` files are now seed input for the one-time migration and for test resets.
+
 ## Product Model
 
 The hierarchy is:
@@ -11,8 +20,8 @@ The hierarchy is:
 Current built-in leagues:
 
 - `שישי בצהריים`
-- `שבת א׳`
-- `שבת ב׳`
+- `שבת A`
+- `שבת B`
 
 The league selector is the top-level filter in the UI:
 
@@ -28,8 +37,8 @@ All numbers are configurable in `src/config.js`. The current defaults are:
 - 3 teams per tournament
 - 5-7 players per team
 - 4 rounds per tournament
-- 2 games per round
-- 8 total games per tournament
+- 3 games per round
+- 12 total games per tournament
 - Points: win = 3, draw = 1, loss = 0
 
 ## App Modes
@@ -79,9 +88,93 @@ The data model is league-aware:
 - Players belong to a `leagueId`
 - Tournaments belong to a `leagueId`
 - Games belong to a tournament
-- Mock seed files live under `mock_data/`
+- Seed files live under `mock_data/`
 
 That means each league has its own players, tournaments, standings, and stats.
+
+## Supabase Layout
+
+The project expects two PostgreSQL schemas:
+
+- `soccer_zone_test`
+- `soccer_zone_prod`
+
+Everything should be seeded into `soccer_zone_test` first. `soccer_zone_prod` should remain empty until you are ready.
+
+Tables per schema:
+
+- `players`
+- `tournaments`
+
+`teams` and `games` are stored as `jsonb` columns inside `tournaments`, which keeps the current frontend model intact and makes the REST migration much smaller.
+
+Bootstrap SQL lives in [`supabase/bootstrap.sql`](/Users/hadarshpivak/projects/h_github/soccer-zone/supabase/bootstrap.sql).
+
+Important Supabase setup notes:
+
+- Add both schemas to Supabase API exposed schemas
+- Use the project URL for REST: `https://gubuvqsutilhsmgxsghq.supabase.co`
+- Use the anon/publishable key in the browser
+- Use the service-role key only for scripts and test reset/seed flows
+
+## Environment Variables
+
+Copy [`.env.example`](/Users/hadarshpivak/projects/h_github/soccer-zone/.env.example) to `.env` or `.env.local` and fill in the secrets.
+
+Browser config:
+
+- `VITE_STORAGE_PROVIDER=supabase`
+- `VITE_SUPABASE_URL=...`
+- `VITE_SUPABASE_ANON_KEY=...`
+- `VITE_SUPABASE_TEST_SCHEMA=soccer_zone_test`
+- `VITE_SUPABASE_PROD_SCHEMA=soccer_zone_prod`
+- `VITE_DEFAULT_DATASET=test`
+- `VITE_ENABLE_PROD_DATASET=false`
+- `VITE_ENABLE_TEST_RESET=true`
+- `VITE_ENABLE_PROD_RESET=false`
+
+Script and test config:
+
+- `SUPABASE_URL=...`
+- `SUPABASE_SERVICE_ROLE_KEY=...`
+- `SUPABASE_TEST_SCHEMA=soccer_zone_test`
+- `SUPABASE_PROD_SCHEMA=soccer_zone_prod`
+- `ALLOW_PROD_DB_RESET=false`
+
+## One-Time Migration
+
+1. Apply [`supabase/bootstrap.sql`](/Users/hadarshpivak/projects/h_github/soccer-zone/supabase/bootstrap.sql) in the Supabase SQL editor, or through `psql` if you prefer using the connection string.
+2. Add the browser and script environment variables.
+3. Seed the test schema from the existing mock files:
+
+```bash
+npm run db:seed:test
+```
+
+That script:
+
+- resets only the selected dataset
+- defaults to `test`
+- refuses to touch `prod` unless `ALLOW_PROD_DB_RESET=true`
+
+Reset the test schema and immediately re-seed it:
+
+```bash
+npm run db:reset:test
+```
+
+## Dataset Behavior
+
+- `test` is the default dataset
+- `prod` is hidden unless `VITE_ENABLE_PROD_DATASET=true`
+- League clear/reset tools are enabled for `test` by default
+- Any `prod` reset path stays blocked unless `VITE_ENABLE_PROD_RESET=true` in the browser and `ALLOW_PROD_DB_RESET=true` in scripts
+
+The admin panel in the UI is enabled by default and now works per selected league:
+
+- `נקה ליגה` clears the selected league's players and tournaments after confirmation
+- `שחזר mock data` restores the selected league from `mock_data/` after confirmation
+- the dataset selector still stays on `test` unless you explicitly enable `prod` through env vars
 
 ## Development
 
@@ -97,6 +190,12 @@ Run the app:
 npm run dev
 ```
 
+Run the app against Supabase:
+
+```bash
+VITE_STORAGE_PROVIDER=supabase npm run dev
+```
+
 Run lint:
 
 ```bash
@@ -109,9 +208,16 @@ Run end-to-end tests:
 npm run test:e2e
 ```
 
+To run e2e against the Supabase test schema instead of local fallback mode, set:
+
+- `VITE_STORAGE_PROVIDER=supabase`
+- `SUPABASE_SERVICE_ROLE_KEY=...`
+
+The Playwright suite resets and re-seeds the `test` schema before each test when Supabase mode is active. Parallel execution was disabled so the shared test schema stays deterministic.
+
 ## Current Notes
 
 - Seed data is currently attached to `שישי בצהריים`
-- `שבת ב׳` now includes a larger sample league dataset with players and tournaments
-- `שבת א׳` is currently a good empty-state sandbox for creating a league from scratch
-- The storage layer is localStorage today, with comments in place for a later Supabase migration
+- `שבת B` now includes a larger sample league dataset with players and tournaments
+- `שבת A` is currently a good empty-state sandbox for creating a league from scratch
+- Browser writes are direct REST calls today, so this setup is convenient but not hardened like a backend-protected admin flow

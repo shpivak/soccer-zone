@@ -3,11 +3,22 @@ import { APP_CONFIG } from './config'
 import { useAppContext } from './hooks/useAppContext'
 import LiveTournament from './pages/LiveTournament'
 import Stats from './pages/Stats'
+import { AVAILABLE_DATASETS } from './utils/storageConfig'
 
 function App() {
-  const { activeDataset, activeLeagueId, setActiveDataset, setActiveLeagueId, resetActiveDataset } = useAppContext()
+  const {
+    activeDataset,
+    activeLeagueId,
+    error,
+    isLoading,
+    isResetEnabled,
+    clearActiveLeagueData,
+    resetActiveLeagueToMockData,
+    setActiveDataset,
+    setActiveLeagueId,
+  } = useAppContext()
   const [page, setPage] = useState('live')
-  const [adminMode, setAdminMode] = useState(false)
+  const [adminMode, setAdminMode] = useState(true)
 
   const handleDatasetChange = (event) => {
     const next = event.target.value
@@ -16,6 +27,20 @@ function App() {
       if (!approved) return
     }
     setActiveDataset(next)
+  }
+
+  const handleClearLeague = async () => {
+    const league = APP_CONFIG.leagues.find((item) => item.id === activeLeagueId)
+    const approved = window.confirm(`למחוק את כל השחקנים והטורנירים של הליגה ${league?.name ?? activeLeagueId}?`)
+    if (!approved) return
+    await clearActiveLeagueData()
+  }
+
+  const handleResetLeagueToMockData = async () => {
+    const league = APP_CONFIG.leagues.find((item) => item.id === activeLeagueId)
+    const approved = window.confirm(`לאפס את הליגה ${league?.name ?? activeLeagueId} לדאטת ה-mock המקורית?`)
+    if (!approved) return
+    await resetActiveLeagueToMockData()
   }
 
   return (
@@ -57,12 +82,26 @@ function App() {
         </div>
       </header>
 
-      {page === 'live' ? <LiveTournament adminMode={adminMode} /> : <Stats />}
+      {error ? (
+        <section className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" data-testid="storage-error">
+          {error}
+        </section>
+      ) : null}
+
+      {isLoading ? (
+        <section className="rounded-2xl bg-white p-4 text-sm shadow-sm" data-testid="loading-state">
+          טוען נתונים...
+        </section>
+      ) : page === 'live' ? (
+        <LiveTournament adminMode={adminMode} />
+      ) : (
+        <Stats />
+      )}
 
       <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm" data-testid="management-panel">
         <h2 className="text-base font-bold">אזור ניהול וכלי מערכת</h2>
         <p className="mt-1 text-sm text-gray-600">
-          מצב ניהול פעיל כאן. בחירת dataset ואיפוס דאטה נשארו זמינים בקוד אבל כבויים כרגע בממשק.
+          מצב ניהול פעיל כאן כברירת מחדל. פעולות הניהול למטה עובדות על הליגה הנבחרת בלבד.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <label className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">
@@ -79,20 +118,30 @@ function App() {
             value={activeDataset}
             onChange={handleDatasetChange}
             data-testid="dataset-select"
-            disabled
+            disabled={!adminMode}
             className="rounded-xl border px-3 py-2 text-sm disabled:opacity-50"
           >
-            <option value="test">test</option>
-            <option value="current">current</option>
-            <option value="prod">prod</option>
+            {AVAILABLE_DATASETS.map((dataset) => (
+              <option key={dataset} value={dataset}>
+                {dataset}
+              </option>
+            ))}
           </select>
           <button
-            onClick={resetActiveDataset}
-            data-testid="reset-dataset"
-            disabled
+            onClick={handleClearLeague}
+            data-testid="clear-league-data"
+            disabled={!adminMode || !isResetEnabled || isLoading}
             className="rounded-xl border px-3 py-2 text-sm disabled:opacity-50"
           >
-            איפוס דאטה
+            נקה ליגה
+          </button>
+          <button
+            onClick={handleResetLeagueToMockData}
+            data-testid="reset-league-to-mock"
+            disabled={!adminMode || !isResetEnabled || isLoading}
+            className="rounded-xl border px-3 py-2 text-sm disabled:opacity-50"
+          >
+            שחזר mock data
           </button>
         </div>
       </section>
