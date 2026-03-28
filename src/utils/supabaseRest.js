@@ -1,10 +1,31 @@
+import { defaultLeagues } from './defaultData'
 import { getSchemaForDataset, SUPABASE_ANON_KEY, SUPABASE_TIMEOUT_MS, SUPABASE_URL } from './storageConfig'
 
+const LEAGUES_TABLE = 'leagues'
 const PLAYERS_TABLE = 'players'
 const TOURNAMENTS_TABLE = 'tournaments'
 const MATCHES_TABLE = 'matches'
+
 const isMissingTableError = (error, tableName) =>
   error instanceof Error && error.message.includes(`Could not find the table`) && error.message.includes(tableName)
+
+const toLeagueRow = (league) => ({
+  id: league.id,
+  name: league.name,
+  type: league.type,
+  season_label: league.seasonLabel ?? '',
+  allow_roster_edits: league.allowRosterEdits === true,
+  teams: league.teams ?? [],
+})
+
+const fromLeagueRow = (row) => ({
+  id: row.id,
+  name: row.name,
+  type: row.type,
+  seasonLabel: row.season_label ?? '',
+  allowRosterEdits: row.allow_roster_edits === true,
+  teams: Array.isArray(row.teams) ? row.teams : [],
+})
 
 const toPlayerRow = (player) => ({
   id: player.id,
@@ -123,9 +144,19 @@ const request = async (dataset, path, init = {}) => {
 
 export const loadDatasetFromSupabase = async (dataset) => {
   const playerPromise = request(dataset, `${PLAYERS_TABLE}?select=id,name,league_id&order=name.asc`)
+  const leaguesPromise = request(
+    dataset,
+    `${LEAGUES_TABLE}?select=id,name,type,season_label,allow_roster_edits,teams&order=name.asc`,
+  ).catch(
+    (error) => {
+      if (!isMissingTableError(error, LEAGUES_TABLE)) throw error
+      return defaultLeagues
+    },
+  )
 
   try {
-    const [playerRows, tournamentRows, matchRows] = await Promise.all([
+    const [leaguesRows, playerRows, tournamentRows, matchRows] = await Promise.all([
+      leaguesPromise,
       playerPromise,
       request(
         dataset,
@@ -137,16 +168,16 @@ export const loadDatasetFromSupabase = async (dataset) => {
       ),
     ])
 
-    const tournaments = withMatchesAttached((tournamentRows ?? []).map(fromTournamentRow), matchRows ?? [])
-
     return {
+      leagues: (leaguesRows ?? []).map(fromLeagueRow),
       players: (playerRows ?? []).map(fromPlayerRow),
-      tournaments,
+      tournaments: withMatchesAttached((tournamentRows ?? []).map(fromTournamentRow), matchRows ?? []),
     }
   } catch (error) {
     if (!isMissingTableError(error, MATCHES_TABLE)) throw error
 
-    const [playerRows, tournamentRows] = await Promise.all([
+    const [leaguesRows, playerRows, tournamentRows] = await Promise.all([
+      leaguesPromise,
       playerPromise,
       request(
         dataset,
@@ -155,17 +186,41 @@ export const loadDatasetFromSupabase = async (dataset) => {
     ])
 
     return {
+      leagues: (leaguesRows ?? []).map(fromLeagueRow),
       players: (playerRows ?? []).map(fromPlayerRow),
       tournaments: (tournamentRows ?? []).map(fromTournamentRow),
     }
   }
 }
 
+export const saveLeaguesToSupabase = async (dataset, leagues) => {
+  try {
+    await request(dataset, `${LEAGUES_TABLE}?id=not.is.null`, {
+      method: 'DELETE',
+      headers: { Prefer: 'return=minimal' },
+    })
+    if (leagues.length > 0) {
+      await request(dataset, LEAGUES_TABLE, {
+        method: 'POST',
+        body: JSON.stringify(leagues.map(toLeagueRow)),
+      })
+    }
+  } catch (error) {
+    if (!isMissingTableError(error, LEAGUES_TABLE)) throw error
+  }
+}
+
 export const savePlayersToSupabase = async (dataset, players) => {
-  await request(dataset, PLAYERS_TABLE, {
-    method: 'POST',
-    body: JSON.stringify(players.map(toPlayerRow)),
+  await request(dataset, `${PLAYERS_TABLE}?id=not.is.null`, {
+    method: 'DELETE',
+    headers: { Prefer: 'return=minimal' },
   })
+  if (players.length > 0) {
+    await request(dataset, PLAYERS_TABLE, {
+      method: 'POST',
+      body: JSON.stringify(players.map(toPlayerRow)),
+    })
+  }
 }
 
 export const saveTournamentsToSupabase = async (dataset, tournaments) => {
@@ -223,12 +278,18 @@ export const resetSupabaseDataset = async (dataset) => {
       request(dataset, `${MATCHES_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
       request(dataset, `${TOURNAMENTS_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
       request(dataset, `${PLAYERS_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
+      request(dataset, `${LEAGUES_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
     ])
   } catch (error) {
-    if (!isMissingTableError(error, MATCHES_TABLE)) throw error
+    if (!isMissingTableError(error, MATCHES_TABLE) && !isMissingTableError(error, LEAGUES_TABLE)) throw error
     await Promise.all([
       request(dataset, `${TOURNAMENTS_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
       request(dataset, `${PLAYERS_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
     ])
+    try {
+      await request(dataset, `${LEAGUES_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+    } catch (leagueError) {
+      if (!isMissingTableError(leagueError, LEAGUES_TABLE)) throw leagueError
+    }
   }
 }

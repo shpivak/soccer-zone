@@ -1,14 +1,7 @@
 import { useMemo, useState } from 'react'
+import { getTeamDisplayName } from '../utils/leagueUtils'
 
 const createEmptyEvent = () => ({ type: 'goal', scorer: '', assister: '' })
-const colorTitle = {
-  black: 'שחור',
-  yellow: 'צהוב',
-  pink: 'ורוד',
-  orange: 'כתום',
-  blue: 'כחול',
-  gray: 'אפור',
-}
 
 const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit, message }) => {
   const [teamA, setTeamA] = useState(editingGame?.teamA ?? teams[0]?.id ?? '')
@@ -69,7 +62,7 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
         >
           {teams.map((team) => (
             <option key={team.id} value={team.id}>
-              {colorTitle[team.color] ?? team.color}
+              {getTeamDisplayName(team)}
             </option>
           ))}
         </select>
@@ -82,7 +75,7 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
         >
           {teams.map((team) => (
             <option key={team.id} value={team.id}>
-              {colorTitle[team.color] ?? team.color}
+              {getTeamDisplayName(team)}
             </option>
           ))}
         </select>

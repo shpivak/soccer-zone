@@ -1,6 +1,13 @@
 import { APP_CONFIG } from '../config'
-import { defaultPlayers, defaultTournaments } from './defaultData'
-import { loadDatasetFromSupabase, resetSupabaseDataset, savePlayersToSupabase, saveTournamentsToSupabase } from './supabaseRest'
+import { defaultLeagues, defaultPlayers, defaultTournaments } from './defaultData'
+import {
+  loadDatasetFromSupabase,
+  resetSupabaseDataset,
+  saveLeaguesToSupabase,
+  savePlayersToSupabase,
+  saveTournamentsToSupabase,
+} from './supabaseRest'
+import { LEAGUE_TYPES } from './leagueUtils'
 import {
   AVAILABLE_DATASETS,
   canResetDataset,
@@ -22,42 +29,89 @@ const safeParse = (value, fallback) => {
   }
 }
 
-const mergePlayers = (storedPlayers) => {
-  const map = new Map(defaultPlayers.map((player) => [player.id, player]))
-  storedPlayers.forEach((player) => map.set(player.id, player))
+const clone = (value) => JSON.parse(JSON.stringify(value))
+
+const mergeById = (defaults, storedItems) => {
+  const map = new Map(defaults.map((item) => [item.id, clone(item)]))
+  storedItems.forEach((item) => map.set(item.id, item))
   return [...map.values()]
 }
 
-const mergeTournaments = (storedTournaments) => {
-  const map = new Map(defaultTournaments.map((tournament) => [tournament.id, tournament]))
-  storedTournaments.forEach((tournament) => map.set(tournament.id, tournament))
-  return [...map.values()].sort((a, b) => {
-    if (a.leagueId !== b.leagueId) return a.leagueId.localeCompare(b.leagueId)
-    return (a.date ?? '').localeCompare(b.date ?? '')
-  })
-}
-
 const getStorageKeys = (dataset) => ({
+  leaguesKey: `soccer-zone-${dataset}-leagues`,
   playersKey: `soccer-zone-${dataset}-players`,
   tournamentsKey: `soccer-zone-${dataset}-tournaments`,
 })
 
-const DEFAULT_LEAGUE_ID = APP_CONFIG.leagues[0].id
+const DEFAULT_LEAGUE_ID = defaultLeagues[0].id
+const legacyLeagueIdMap = {
+  'friday-noon': 'tournament-1',
+  'saturday-a': 'tournament-2',
+  'saturday-b': 'tournament-3',
+}
+
+const normalizeLeagueId = (leagueId) => legacyLeagueIdMap[leagueId] ?? leagueId ?? DEFAULT_LEAGUE_ID
+
+const placeholderPlayerNames = {
+  'א א': 'אורי אביטל',
+  'ב ב': 'ברק בן עמי',
+  'ג ג': 'גיל גבע',
+  'ד ד': 'דור דנון',
+  'ה ה': 'הראל הלוי',
+  'ו ו': 'ויו וינר',
+  'ז ז': 'זיו זוהר',
+  'ח ח': 'חן חזון',
+}
+
+const normalizedTeamNames = {
+  'תל אביב': 'נשרים',
+  'חיפה': 'זאבים',
+  'ירושלים': 'דרקונים',
+  'באר שבע': 'אריות',
+  Eagles: 'נשרים',
+  Wolves: 'זאבים',
+  Dragons: 'דרקונים',
+  Lions: 'אריות',
+}
+
+const normalizePlayerName = (name) => placeholderPlayerNames[name] ?? name
+const normalizeTeamName = (name) => normalizedTeamNames[name] ?? name
+
+const migrateLeague = (league) => ({
+  id: league.id,
+  name:
+    (league.id === 'regular-1' && (league.name?.trim() === 'ליגת סוקרזון 4' || league.name?.trim() === '1st sz league')
+      ? 'ליגת סוקרזון 5'
+      : league.name?.trim()) || APP_CONFIG.defaultLeagueName,
+  type: Object.values(LEAGUE_TYPES).includes(league.type) ? league.type : LEAGUE_TYPES.tournament,
+  seasonLabel: league.seasonLabel?.trim() || '2026',
+  allowRosterEdits: league.allowRosterEdits === true,
+  teams: (league.teams ?? []).map((team, index) => ({
+    ...team,
+    id: team.id ?? `team${index + 1}`,
+    name: normalizeTeamName(team.name ?? ''),
+    color: team.color ?? APP_CONFIG.allowedTeamColors[index] ?? 'gray',
+    players: Array.isArray(team.players) ? team.players : [],
+  })),
+})
 
 const migratePlayer = (player) => ({
   ...player,
-  leagueId: player.leagueId ?? DEFAULT_LEAGUE_ID,
+  name: normalizePlayerName(player.name),
+  leagueId: normalizeLeagueId(player.leagueId),
 })
 
 const migrateTournament = (tournament, index) => ({
   ...tournament,
   leagueNumber: tournament.leagueNumber ?? index + 1,
-  leagueId: tournament.leagueId ?? DEFAULT_LEAGUE_ID,
+  leagueId: normalizeLeagueId(tournament.leagueId),
   year: tournament.year ?? (Number((tournament.date ?? '').slice(0, 4)) || new Date().getFullYear()),
   teams: (tournament.teams ?? []).map((team, teamIndex) => ({
     ...team,
     color: team.color === 'red' ? 'black' : team.color === 'green' ? 'pink' : team.color,
     id: team.id ?? `team${teamIndex + 1}`,
+    name: normalizeTeamName(team.name ?? ''),
+    players: Array.isArray(team.players) ? team.players : [],
   })),
   games: (tournament.games ?? []).map((game, gameIndex) => ({
     ...game,
@@ -66,8 +120,12 @@ const migrateTournament = (tournament, index) => ({
 })
 
 const defaultDataByDataset = (dataset) => {
-  if (dataset === 'prod') return { players: [], tournaments: [] }
-  return { players: defaultPlayers, tournaments: defaultTournaments }
+  if (dataset === 'prod') return { leagues: [], players: [], tournaments: [] }
+  return {
+    leagues: defaultLeagues.map(clone),
+    players: defaultPlayers.map(clone),
+    tournaments: defaultTournaments.map(clone),
+  }
 }
 
 export const getActiveDataset = () => {
@@ -80,8 +138,8 @@ export const setActiveDataset = (dataset) => {
 }
 
 export const getActiveLeague = () => {
-  const leagueId = localStorage.getItem(ACTIVE_LEAGUE_KEY)
-  return APP_CONFIG.leagues.some((league) => league.id === leagueId) ? leagueId : DEFAULT_LEAGUE_ID
+  const leagueId = normalizeLeagueId(localStorage.getItem(ACTIVE_LEAGUE_KEY))
+  return defaultLeagues.some((league) => league.id === leagueId) ? leagueId : DEFAULT_LEAGUE_ID
 }
 
 export const setActiveLeague = (leagueId) => {
@@ -89,6 +147,7 @@ export const setActiveLeague = (leagueId) => {
 }
 
 const normalizeLoadedData = (dataset, data) => ({
+  leagues: data.leagues.map(migrateLeague),
   players: data.players.map(migratePlayer),
   tournaments: data.tournaments.map(migrateTournament),
 })
@@ -96,26 +155,34 @@ const normalizeLoadedData = (dataset, data) => ({
 const loadDatasetDataFromLocal = (dataset) => {
   const defaults = defaultDataByDataset(dataset)
   const resolvedDataset = resolveDataset(dataset)
-  const { playersKey, tournamentsKey } = getStorageKeys(resolvedDataset)
+  const { leaguesKey, playersKey, tournamentsKey } = getStorageKeys(resolvedDataset)
+  const storedLeagues = localStorage.getItem(leaguesKey)
   const storedPlayers = localStorage.getItem(playersKey)
   const storedTournaments = localStorage.getItem(tournamentsKey)
 
   const legacyPlayers = localStorage.getItem(LEGACY_PLAYERS_KEY)
   const legacyTournaments = localStorage.getItem(LEGACY_TOURNAMENTS_KEY)
 
-  const playersSource = storedPlayers ?? legacyPlayers
-  const tournamentsSource = storedTournaments ?? legacyTournaments
-
-  const parsedPlayers = playersSource ? safeParse(playersSource, defaults.players) : defaults.players
+  const parsedLeagues = storedLeagues ? safeParse(storedLeagues, defaults.leagues) : defaults.leagues
+  const parsedPlayers = (storedPlayers ?? legacyPlayers)
+    ? safeParse(storedPlayers ?? legacyPlayers, defaults.players)
+    : defaults.players
   const parsedTournaments = storedTournaments
     ? safeParse(storedTournaments, defaults.tournaments)
-    : tournamentsSource
-      ? safeParse(tournamentsSource, defaults.tournaments)
+    : legacyTournaments
+      ? safeParse(legacyTournaments, defaults.tournaments)
       : defaults.tournaments
 
   return normalizeLoadedData(resolvedDataset, {
-    players: resolvedDataset === 'prod' ? parsedPlayers : mergePlayers(parsedPlayers),
-    tournaments: resolvedDataset === 'prod' ? parsedTournaments : mergeTournaments(parsedTournaments),
+    leagues: resolvedDataset === 'prod' ? parsedLeagues : mergeById(defaults.leagues, parsedLeagues),
+    players: resolvedDataset === 'prod' ? parsedPlayers : mergeById(defaults.players, parsedPlayers),
+    tournaments:
+      resolvedDataset === 'prod'
+        ? parsedTournaments
+        : mergeById(defaults.tournaments, parsedTournaments).sort((a, b) => {
+            if (a.leagueId !== b.leagueId) return a.leagueId.localeCompare(b.leagueId)
+            return (a.date ?? '').localeCompare(b.date ?? '')
+          }),
   })
 }
 
@@ -129,6 +196,11 @@ export const loadDatasetData = async (dataset) => {
   return loadDatasetDataFromLocal(resolvedDataset)
 }
 
+const saveLeaguesToLocal = (dataset, leagues) => {
+  const { leaguesKey } = getStorageKeys(resolveDataset(dataset))
+  localStorage.setItem(leaguesKey, JSON.stringify(leagues))
+}
+
 const savePlayersToLocal = (dataset, players) => {
   const { playersKey } = getStorageKeys(resolveDataset(dataset))
   localStorage.setItem(playersKey, JSON.stringify(players))
@@ -137,6 +209,16 @@ const savePlayersToLocal = (dataset, players) => {
 const saveTournamentsToLocal = (dataset, tournaments) => {
   const { tournamentsKey } = getStorageKeys(resolveDataset(dataset))
   localStorage.setItem(tournamentsKey, JSON.stringify(tournaments))
+}
+
+export const saveLeagues = async (dataset, leagues) => {
+  const resolvedDataset = resolveDataset(dataset)
+  if (isSupabaseConfigured()) {
+    await saveLeaguesToSupabase(resolvedDataset, leagues)
+    return
+  }
+
+  saveLeaguesToLocal(resolvedDataset, leagues)
 }
 
 export const savePlayers = async (dataset, players) => {
@@ -173,6 +255,7 @@ export const resetDatasetData = async (dataset) => {
   }
 
   const defaults = defaultDataByDataset(resolvedDataset)
+  saveLeaguesToLocal(resolvedDataset, defaults.leagues)
   savePlayersToLocal(resolvedDataset, defaults.players)
   saveTournamentsToLocal(resolvedDataset, defaults.tournaments)
 }

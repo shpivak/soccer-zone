@@ -1,25 +1,14 @@
-const colorTitle = {
-  black: 'שחור',
-  yellow: 'צהוב',
-  pink: 'ורוד',
-  orange: 'כתום',
-  blue: 'כחול',
-  gray: 'אפור',
-}
+import { getSessionLabel, getTeamDisplayName } from '../utils/leagueUtils'
 
-const TournamentTable = ({ games, teams, onEdit, onDelete, readOnly }) => {
-  const teamMap = new Map(teams.map((team) => [team.id, colorTitle[team.color] ?? team.color]))
-  const teamSlugMap = new Map(teams.map((team) => [team.id, team.color]))
+const TournamentTable = ({ games, teams, league, onEdit, onDelete, readOnly }) => {
+  const teamMap = new Map(teams.map((team) => [team.id, getTeamDisplayName(team)]))
 
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm">
-      <h2 className="mb-3 text-lg font-bold">משחקים בטורניר</h2>
+      <h2 className="mb-3 text-lg font-bold">משחקים ב{getSessionLabel(league)}</h2>
       <div className="space-y-3">
         {games.map((game) => (
           <article key={game.id} data-testid={`game-row-${game.id}`} className="rounded-xl border p-3">
-            <p className="text-sm text-gray-500">
-              סבב {game.round ?? 1} - {teamSlugMap.get(game.teamA)}-{teamSlugMap.get(game.teamB)}
-            </p>
             <p className="text-lg font-semibold">
               {teamMap.get(game.teamA)} {game.score.a} - {game.score.b} {teamMap.get(game.teamB)}
             </p>

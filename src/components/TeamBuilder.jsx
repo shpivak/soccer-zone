@@ -1,4 +1,5 @@
 import { APP_CONFIG } from '../config'
+import { getTeamDisplayName } from '../utils/leagueUtils'
 
 const colorLabel = {
   black: 'שחור',
@@ -18,7 +19,17 @@ const colorClass = {
   gray: 'bg-gray-50 border-gray-300',
 }
 
-const TeamBuilder = ({ teams, players, disabled, onAssignPlayer, onChangeTeamColor, message }) => {
+const TeamBuilder = ({
+  teams,
+  players,
+  disabled,
+  onAssignPlayer,
+  onChangeTeamColor,
+  onChangeTeamName,
+  message,
+  allowColorEdit = true,
+  allowNameEdit = false,
+}) => {
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm">
       <h2 className="mb-3 text-lg font-bold">בניית קבוצות</h2>
@@ -35,20 +46,33 @@ const TeamBuilder = ({ teams, players, disabled, onAssignPlayer, onChangeTeamCol
             className={`rounded-xl border p-3 ${colorClass[team.color] ?? 'bg-gray-50 border-gray-300'}`}
           >
             <div className="mb-2 flex items-center justify-between gap-2">
-              <h3 className="font-semibold">קבוצת {colorLabel[team.color] ?? team.color}</h3>
-              <select
-                value={team.color}
-                disabled={disabled}
-                onChange={(event) => onChangeTeamColor(team.id, event.target.value)}
-                data-testid={`team-color-select-${team.id}`}
-                className="rounded-lg border bg-white p-2 text-sm"
-              >
-                {APP_CONFIG.allowedTeamColors.map((color) => (
-                  <option key={color} value={color}>
-                    {colorLabel[color] ?? color}
-                  </option>
-                ))}
-              </select>
+              {allowNameEdit ? (
+                <input
+                  value={team.name ?? ''}
+                  disabled={disabled}
+                  onChange={(event) => onChangeTeamName(team.id, event.target.value)}
+                  data-testid={`team-name-input-${team.id}`}
+                  placeholder="שם קבוצה"
+                  className="min-w-0 flex-1 rounded-lg border bg-white p-2 text-sm"
+                />
+              ) : (
+                <h3 className="font-semibold">{getTeamDisplayName(team)}</h3>
+              )}
+              {allowColorEdit ? (
+                <select
+                  value={team.color}
+                  disabled={disabled}
+                  onChange={(event) => onChangeTeamColor(team.id, event.target.value)}
+                  data-testid={`team-color-select-${team.id}`}
+                  className="rounded-lg border bg-white p-2 text-sm"
+                >
+                  {APP_CONFIG.allowedTeamColors.map((color) => (
+                    <option key={color} value={color}>
+                      {colorLabel[color] ?? color}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
             </div>
             <div className="space-y-2">
               {players.map((player) => {

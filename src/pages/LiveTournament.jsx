@@ -6,43 +6,71 @@ import TournamentTable from '../components/TournamentTable'
 import { APP_CONFIG } from '../config'
 import { useAppContext } from '../hooks/useAppContext'
 import { useTournamentEditor } from '../hooks/useTournamentEditor'
-import { calculateStandings } from '../utils/tournamentUtils'
+import {
+  canEditTeamsInLiveMode,
+  getLeagueTypeLabel,
+  getLeagueModeLabels,
+  getMaxPlayersPerTeam,
+  getSessionGamesLimit,
+  LEAGUE_TYPES,
+} from '../utils/leagueUtils'
+import { calculateLeagueStandings, calculateStandings } from '../utils/tournamentUtils'
 
 const LiveTournament = ({ adminMode }) => {
-  const { activeLeagueId, players, tournaments, setPlayers, setTournaments } = useAppContext()
-  const league = APP_CONFIG.leagues.find((item) => item.id === activeLeagueId)
-  const leaguePlayers = useMemo(
-    () => players.filter((player) => player.leagueId === activeLeagueId),
-    [activeLeagueId, players],
-  )
+  const { activeLeagueId, leagues, players, tournaments, setLeagues, setPlayers, setTournaments } = useAppContext()
+  const league = leagues.find((item) => item.id === activeLeagueId) ?? null
+  const leaguePlayers = useMemo(() => players.filter((player) => player.leagueId === activeLeagueId), [activeLeagueId, players])
   const leagueTournaments = useMemo(
     () => tournaments.filter((tournament) => tournament.leagueId === activeLeagueId),
     [activeLeagueId, tournaments],
   )
   const { selectedTournamentId, setSelectedTournamentId, selectedTournament, createTournament } =
-    useTournamentEditor(leagueTournaments, leaguePlayers, activeLeagueId)
+    useTournamentEditor(leagueTournaments, leaguePlayers, league)
   const [editingGame, setEditingGame] = useState(null)
   const [newPlayerName, setNewPlayerName] = useState('')
   const [teamBuilderMessage, setTeamBuilderMessage] = useState('')
   const [gameInputMessage, setGameInputMessage] = useState('')
+  const labels = getLeagueModeLabels(league?.type)
+  const isRegularSetupEditable =
+    league?.type === LEAGUE_TYPES.regular &&
+    (selectedTournament?.leagueNumber === 1 || league?.allowRosterEdits === true)
 
   const standings = useMemo(() => {
+    if (!league) return []
+    if (league.type === LEAGUE_TYPES.regular) {
+      return calculateLeagueStandings(league, leagueTournaments, APP_CONFIG.points)
+    }
     if (!selectedTournament) return []
     return calculateStandings(selectedTournament, APP_CONFIG.points)
-  }, [selectedTournament])
+  }, [league, leagueTournaments, selectedTournament])
 
   const updateSelectedTournament = (updater) => {
     setTournaments((current) =>
-      current.map((item) =>
-        item.id === selectedTournamentId ? { ...item, ...updater(item) } : item,
-      ),
+      current.map((item) => (item.id === selectedTournamentId ? { ...item, ...updater(item) } : item)),
     )
-    // FUTURE: replace with Supabase insert/update
-    // supabase.from('tournaments').update(...)
+  }
+
+  const syncRegularLeagueTeams = (updater) => {
+    if (!league) return
+    let nextTeams = league.teams ?? []
+    setLeagues((current) =>
+      current.map((item) => {
+        if (item.id !== league.id) return item
+        nextTeams = updater(item.teams ?? [])
+        return { ...item, teams: nextTeams }
+      }),
+    )
+    setTournaments((current) =>
+      current.map((item) => (item.leagueId === league.id ? { ...item, teams: nextTeams.map((team) => ({ ...team })) } : item)),
+    )
   }
 
   const handleCreateTournament = () => {
-    if (!adminMode) return
+    if (!adminMode || !league) return
+    if (league.type === LEAGUE_TYPES.regular && (league.teams?.length ?? 0) < 2) {
+      setTeamBuilderMessage('בליגה סדירה צריך להגדיר לפחות שתי קבוצות לפני יצירת מחזור.')
+      return
+    }
     setGameInputMessage('')
     const tournament = createTournament()
     setTournaments((current) => [...current, tournament])
@@ -50,40 +78,53 @@ const LiveTournament = ({ adminMode }) => {
   }
 
   const handleAssignPlayer = (teamId, playerId, checked) => {
-    if (!adminMode || !selectedTournament) return
-    const targetTeam = selectedTournament.teams.find((team) => team.id === teamId)
-    const playerCurrentTeam = selectedTournament.teams.find((team) => team.players.includes(playerId))
+    if (!adminMode || !league) return
+    const targetTeams = league.type === LEAGUE_TYPES.regular ? league.teams ?? [] : selectedTournament?.teams ?? []
+    const targetTeam = targetTeams.find((team) => team.id === teamId)
+    const playerCurrentTeam = targetTeams.find((team) => team.players.includes(playerId))
+    const maxPlayersPerTeam = getMaxPlayersPerTeam(league)
 
     if (checked && playerCurrentTeam && playerCurrentTeam.id !== teamId) {
-      setTeamBuilderMessage('שחקן לא יכול להיות משויך לשתי קבוצות באותו טורניר.')
+      setTeamBuilderMessage(
+        league.type === LEAGUE_TYPES.regular
+          ? 'שחקן לא יכול להיות משויך לשתי קבוצות קבועות באותה ליגה.'
+          : 'שחקן לא יכול להיות משויך לשתי קבוצות באותו טורניר.',
+      )
       return
     }
 
-    if (checked && targetTeam && targetTeam.players.length >= APP_CONFIG.maxPlayersPerTeam) {
-      setTeamBuilderMessage(`אי אפשר להוסיף יותר מ-${APP_CONFIG.maxPlayersPerTeam} שחקנים לקבוצה.`)
+    if (checked && targetTeam && targetTeam.players.length >= maxPlayersPerTeam) {
+      setTeamBuilderMessage(`אי אפשר להוסיף יותר מ-${maxPlayersPerTeam} שחקנים לקבוצה.`)
       return
     }
 
     setTeamBuilderMessage('')
-    updateSelectedTournament((tournament) => ({
-      teams: tournament.teams.map((team) => {
+    const applyUpdate = (teams) =>
+      teams.map((team) => {
         const removedPlayers = team.players.filter((id) => id !== playerId)
         if (team.id !== teamId) return { ...team, players: removedPlayers }
         return { ...team, players: checked ? [...removedPlayers, playerId] : removedPlayers }
-      }),
-    }))
+      })
+
+    if (league.type === LEAGUE_TYPES.regular) {
+      syncRegularLeagueTeams(applyUpdate)
+      return
+    }
+
+    updateSelectedTournament((tournament) => ({ teams: applyUpdate(tournament.teams) }))
   }
 
   const handleSaveGame = (game) => {
-    if (!adminMode || !selectedTournament) return
+    if (!adminMode || !selectedTournament || !league) return
     setGameInputMessage('')
     updateSelectedTournament((tournament) => {
       const exists = tournament.games.some((item) => item.id === game.id)
       if (exists) {
         return { games: tournament.games.map((item) => (item.id === game.id ? game : item)) }
       }
-      if (tournament.games.length >= APP_CONFIG.gamesPerTournament) {
-        setGameInputMessage(`אי אפשר להוסיף יותר מ-${APP_CONFIG.gamesPerTournament} משחקים לטורניר.`)
+      const gameLimit = getSessionGamesLimit(league)
+      if (tournament.games.length >= gameLimit) {
+        setGameInputMessage(labels.maxGamesMessage(gameLimit))
         return { games: tournament.games }
       }
       return { games: [...tournament.games, { ...game, round: tournament.games.length + 1 }] }
@@ -108,33 +149,55 @@ const LiveTournament = ({ adminMode }) => {
   }
 
   const handleChangeTeamColor = (teamId, color) => {
-    if (!adminMode || !selectedTournament) return
+    if (!adminMode || !selectedTournament || !canEditTeamsInLiveMode(league)) return
     setTeamBuilderMessage('')
-    setGameInputMessage('')
     updateSelectedTournament((tournament) => ({
       teams: tournament.teams.map((team) => (team.id === teamId ? { ...team, color } : team)),
     }))
+  }
+
+  const handleChangeTeamName = (teamId, name) => {
+    if (!adminMode || !league || league.type !== LEAGUE_TYPES.regular) return
+    syncRegularLeagueTeams((teams) => teams.map((team) => (team.id === teamId ? { ...team, name } : team)))
+  }
+
+  const handleAddRegularTeam = () => {
+    if (!adminMode || !league || league.type !== LEAGUE_TYPES.regular) return
+    if ((league.teams?.length ?? 0) >= APP_CONFIG.regular.maxTeams) {
+      setTeamBuilderMessage(`אפשר להגדיר עד ${APP_CONFIG.regular.maxTeams} קבוצות בליגה סדירה.`)
+      return
+    }
+    setTeamBuilderMessage('')
+    syncRegularLeagueTeams((teams) => [
+      ...teams,
+      {
+        id: `regular-team-${Date.now()}`,
+        name: `קבוצה ${teams.length + 1}`,
+        color: APP_CONFIG.allowedTeamColors[teams.length % APP_CONFIG.allowedTeamColors.length] ?? 'gray',
+        players: [],
+      },
+    ])
   }
 
   const handleAddPlayer = () => {
     if (!adminMode || !newPlayerName.trim()) return
     const nextPlayer = { id: `p${Date.now()}`, name: newPlayerName.trim(), leagueId: activeLeagueId }
     setPlayers((current) => [...current, nextPlayer])
-    // FUTURE: replace with Supabase insert/update
-    // supabase.from('players').insert(nextPlayer)
     setNewPlayerName('')
   }
+
+  if (!league) return null
 
   if (!selectedTournament) {
     return (
       <div className="rounded-2xl bg-white p-4 shadow-sm">
-        <p>אין טורניר זמין. ניתן ליצור טורניר חדש.</p>
+        <p>{labels.empty}</p>
         <button
           onClick={handleCreateTournament}
           data-testid="create-tournament-empty"
           className="mt-3 rounded-xl bg-black px-4 py-3 text-white"
         >
-          צור טורניר
+          {labels.create}
         </button>
       </div>
     )
@@ -143,44 +206,42 @@ const LiveTournament = ({ adminMode }) => {
   return (
     <div className="space-y-4">
       <header className="sticky top-0 z-10 rounded-2xl bg-white p-4 shadow-sm">
-        <h1 className="text-xl font-bold">ניהול טורניר חי</h1>
+        <h1 className="text-xl font-bold">{labels.liveTitle}</h1>
         <div className="mt-3 flex flex-wrap gap-2">
-          <select
-            value={selectedTournamentId}
-            onChange={(e) => setSelectedTournamentId(e.target.value)}
-            data-testid="tournament-select"
-            className="rounded-xl border p-3"
-          >
-            {leagueTournaments.map((tournament) => (
-              <option key={tournament.id} value={tournament.id}>
-                {league?.name ?? APP_CONFIG.leagueName} {tournament.leagueNumber ?? '-'} /{' '}
-                {tournament.year ?? '-'} - {tournament.date}
-              </option>
-            ))}
-          </select>
+          {selectedTournament ? (
+            <select
+              value={selectedTournamentId}
+              onChange={(e) => setSelectedTournamentId(e.target.value)}
+              data-testid="tournament-select"
+              className="rounded-xl border p-3"
+            >
+              {leagueTournaments.map((tournament) => (
+                <option key={tournament.id} value={tournament.id}>
+                  {league.name} {labels.selectLabel} {tournament.leagueNumber ?? '-'} / {tournament.year ?? '-'} - {tournament.date}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <button
             onClick={handleCreateTournament}
             disabled={!adminMode}
-            data-testid="create-tournament"
+            data-testid={selectedTournament ? 'create-tournament' : 'create-tournament-empty'}
             className="rounded-xl bg-black px-4 py-3 text-white disabled:opacity-40"
           >
-            טורניר חדש
+            {selectedTournament ? labels.createAnother : labels.create}
           </button>
           <button
             onClick={handleUndoLastGame}
-            disabled={!adminMode || selectedTournament.games.length === 0}
+            disabled={!adminMode || !selectedTournament || selectedTournament.games.length === 0}
             data-testid="undo-last-game"
             className="rounded-xl border px-4 py-3 disabled:opacity-40"
           >
             בטל משחק אחרון
           </button>
         </div>
-        <p className="mt-2 text-sm text-gray-600">
-          ליגה נבחרת: {league?.name ?? APP_CONFIG.leagueName}
-        </p>
+        <p className="mt-2 text-sm text-gray-600">ליגה נבחרת: {league.name}</p>
         <p className="mt-1 text-sm text-gray-600">
-          {league?.name ?? APP_CONFIG.leagueName} {selectedTournament.leagueNumber ?? '-'} /{' '}
-          {selectedTournament.year ?? '-'}
+          סוג ליגה: {getLeagueTypeLabel(league.type)} | עונה: {league.seasonLabel || '-'}
         </p>
       </header>
 
@@ -206,35 +267,92 @@ const LiveTournament = ({ adminMode }) => {
         </div>
       </section>
 
-      <TeamBuilder
-        teams={selectedTournament.teams}
-        players={leaguePlayers}
-        disabled={!adminMode}
-        onAssignPlayer={handleAssignPlayer}
-        onChangeTeamColor={handleChangeTeamColor}
-        message={teamBuilderMessage}
-      />
+      {league.type === LEAGUE_TYPES.regular ? (
+        <section className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-lg font-bold">הגדרת קבוצות</h2>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={league.allowRosterEdits === true}
+                  disabled={!adminMode}
+                  onChange={(event) =>
+                    setLeagues((current) =>
+                      current.map((item) =>
+                        item.id === league.id ? { ...item, allowRosterEdits: event.target.checked } : item,
+                      ),
+                    )
+                  }
+                  data-testid="regular-roster-edit-toggle"
+                  className="h-4 w-4"
+                />
+                <span>אפשר עריכת סגל</span>
+              </label>
+              <button
+                onClick={handleAddRegularTeam}
+                disabled={!adminMode || !isRegularSetupEditable}
+                data-testid="add-regular-team"
+                className="rounded-xl border px-3 py-2 text-sm disabled:opacity-40"
+              >
+                הוסף קבוצה
+              </button>
+            </div>
+          </div>
+          <TeamBuilder
+            teams={selectedTournament?.teams ?? []}
+            players={leaguePlayers}
+            disabled={!adminMode || !isRegularSetupEditable}
+            onAssignPlayer={handleAssignPlayer}
+            onChangeTeamColor={() => {}}
+            onChangeTeamName={handleChangeTeamName}
+            message={teamBuilderMessage}
+            allowColorEdit={false}
+            allowNameEdit={isRegularSetupEditable}
+          />
+        </section>
+      ) : (
+        <TeamBuilder
+          teams={selectedTournament?.teams ?? []}
+          players={leaguePlayers}
+          disabled={!adminMode}
+          onAssignPlayer={handleAssignPlayer}
+          onChangeTeamColor={handleChangeTeamColor}
+          message={teamBuilderMessage}
+        />
+      )}
 
-      <GameInput
-        key={editingGame?.id ?? 'new-game'}
-        teams={selectedTournament.teams}
-        players={leaguePlayers}
-        disabled={!adminMode}
-        onSave={handleSaveGame}
-        editingGame={editingGame}
-        onCancelEdit={() => setEditingGame(null)}
-        message={gameInputMessage}
-      />
+      {selectedTournament ? (
+        <>
+          <GameInput
+            key={editingGame?.id ?? `${selectedTournament.id}-new-game`}
+            teams={selectedTournament.teams}
+            players={leaguePlayers}
+            disabled={!adminMode}
+            onSave={handleSaveGame}
+            editingGame={editingGame}
+            onCancelEdit={() => setEditingGame(null)}
+            message={gameInputMessage}
+          />
 
-      <ScoreBoard standings={standings} />
+          {league.type !== LEAGUE_TYPES.friendly ? (
+            <ScoreBoard
+              standings={standings}
+              title={league.type === LEAGUE_TYPES.regular ? 'טבלת ליגה כוללת' : 'טבלת מצב חיה'}
+              showGoals={league.type === LEAGUE_TYPES.regular}
+            />
+          ) : null}
 
-      <TournamentTable
-        games={selectedTournament.games}
-        teams={selectedTournament.teams}
-        readOnly={!adminMode}
-        onEdit={setEditingGame}
-        onDelete={handleDeleteGame}
-      />
+          <TournamentTable
+            league={league}
+            games={selectedTournament.games}
+            teams={selectedTournament.teams}
+            readOnly={!adminMode}
+            onEdit={setEditingGame}
+            onDelete={handleDeleteGame}
+          />
+        </>
+      ) : null}
     </div>
   )
 }

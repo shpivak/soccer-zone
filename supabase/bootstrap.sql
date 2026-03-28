@@ -1,6 +1,16 @@
 create schema if not exists soccer_zone_test;
 create schema if not exists soccer_zone_prod;
 
+create table if not exists soccer_zone_test.leagues (
+  id text primary key,
+  name text not null,
+  type text not null,
+  season_label text not null default '',
+  allow_roster_edits boolean not null default false,
+  teams jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
 create table if not exists soccer_zone_test.players (
   id text primary key,
   name text not null,
@@ -38,6 +48,16 @@ create table if not exists soccer_zone_prod.players (
   created_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists soccer_zone_prod.leagues (
+  id text primary key,
+  name text not null,
+  type text not null,
+  season_label text not null default '',
+  allow_roster_edits boolean not null default false,
+  teams jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
 create table if not exists soccer_zone_prod.tournaments (
   id text primary key,
   date date not null,
@@ -64,9 +84,19 @@ create table if not exists soccer_zone_prod.matches (
 alter table soccer_zone_test.players enable row level security;
 alter table soccer_zone_test.tournaments enable row level security;
 alter table soccer_zone_test.matches enable row level security;
+alter table soccer_zone_test.leagues enable row level security;
 alter table soccer_zone_prod.players enable row level security;
 alter table soccer_zone_prod.tournaments enable row level security;
 alter table soccer_zone_prod.matches enable row level security;
+alter table soccer_zone_prod.leagues enable row level security;
+
+drop policy if exists "test_leagues_full_access" on soccer_zone_test.leagues;
+create policy "test_leagues_full_access"
+on soccer_zone_test.leagues
+for all
+to anon, authenticated
+using (true)
+with check (true);
 
 drop policy if exists "test_players_full_access" on soccer_zone_test.players;
 create policy "test_players_full_access"
@@ -87,6 +117,15 @@ with check (true);
 drop policy if exists "test_matches_full_access" on soccer_zone_test.matches;
 create policy "test_matches_full_access"
 on soccer_zone_test.matches
+for all
+to anon, authenticated
+using (true)
+with check (true);
+
+drop policy if exists "prod_players_read_write" on soccer_zone_prod.players;
+drop policy if exists "prod_leagues_read_write" on soccer_zone_prod.leagues;
+create policy "prod_leagues_read_write"
+on soccer_zone_prod.leagues
 for all
 to anon, authenticated
 using (true)

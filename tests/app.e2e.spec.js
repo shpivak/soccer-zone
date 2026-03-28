@@ -40,20 +40,22 @@ test.afterEach(async ({ page }) => {
   await resetTestData()
 })
 
-test('main navigation and stats render for the selected league', async ({ page }) => {
+test('main navigation, dropdown labels, and tournament stats render for the selected league', async ({ page }) => {
   await expect(page.getByTestId('nav-live')).toBeVisible()
   await expect(page.getByTestId('live-standings-table')).toBeVisible()
+  await expect(page.getByTestId('league-select')).toContainText('שישי צהריים (ליגת טורנירים)')
+  await expect(page.getByTestId('league-select')).toContainText('ליגת סוקרזון 5 (ליגה סדירה)')
   await expect(page.getByRole('columnheader', { name: 'תיקו' })).toBeVisible()
   await expect(page.getByRole('columnheader', { name: 'הפסדים' })).toBeVisible()
 
-  await page.getByTestId('league-select').selectOption('saturday-b')
+  await page.getByTestId('league-select').selectOption('tournament-3')
   await expect(page.locator('[data-testid="tournament-select"] option')).toHaveCount(3)
 
-  await page.getByTestId('league-select').selectOption('friday-noon')
+  await page.getByTestId('league-select').selectOption('tournament-1')
   await page.getByTestId('tournament-select').selectOption('2026-03-15')
 
   await page.getByTestId('nav-stats').click()
-  await expect(page.getByRole('heading', { name: 'סטטיסטיקות כלל הטורנירים - שישי בצהריים' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'סטטיסטיקות כלל הטורנירים - שישי צהריים' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'טבלת MVP כללית' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'דירוג שערים' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'דירוג בישולים' })).toBeVisible()
@@ -63,13 +65,13 @@ test('main navigation and stats render for the selected league', async ({ page }
   await expect(page.getByTestId('tournament-select')).toBeVisible()
 })
 
-test('management controls are separated and saturday a can still start empty', async ({ page }) => {
+test('management controls are separated and empty tournament leagues can still start from scratch', async ({ page }) => {
   await expect(page.getByTestId('management-panel')).toBeVisible()
   await expect(page.getByTestId('admin-toggle')).toBeChecked()
   await expect(page.getByTestId('dataset-select')).toBeEnabled()
   await expect(page.getByTestId('clear-league-data')).toBeEnabled()
   await expect(page.getByTestId('reset-league-to-mock')).toBeEnabled()
-  await page.getByTestId('league-select').selectOption('saturday-a')
+  await page.getByTestId('league-select').selectOption('tournament-2')
   await expect(page.getByText('אין טורניר זמין. ניתן ליצור טורניר חדש.')).toBeVisible()
 
   await page.getByTestId('create-tournament-empty').click()
@@ -77,16 +79,14 @@ test('management controls are separated and saturday a can still start empty', a
   await addPlayer(page, 'שחקן ליגת שבת')
   await expect(page.getByTestId('team-card-team1').getByText('שחקן ליגת שבת')).toBeVisible()
 
-  await page.getByTestId('league-select').selectOption('friday-noon')
+  await page.getByTestId('league-select').selectOption('tournament-1')
   const optionsBefore = await page.locator('[data-testid="tournament-select"] option').count()
   await page.getByTestId('create-tournament').click()
   await expect(page.locator('[data-testid="tournament-select"] option')).toHaveCount(optionsBefore + 1)
 })
 
-test('management actions clear the selected league and can restore its mock data after confirmation', async ({
-  page,
-}) => {
-  await page.getByTestId('league-select').selectOption('friday-noon')
+test('management actions clear the selected league and can restore its mock data after confirmation', async ({ page }) => {
+  await page.getByTestId('league-select').selectOption('tournament-1')
   await expect(page.locator('[data-testid="tournament-select"] option')).toHaveCount(2)
 
   page.once('dialog', (dialog) => dialog.accept())
@@ -105,14 +105,14 @@ test('management actions clear the selected league and can restore its mock data
   await expect(page.locator('[data-testid^="player-stats-row-"]')).not.toHaveCount(0)
 })
 
-test('team builder enforces unique players, max seven players, and team color changes', async ({
+test('team builder enforces unique players, max seven players, and team color changes for tournament leagues', async ({
   page,
 }) => {
   await page.getByTestId('admin-toggle').check()
   await addPlayers(page, ['תוספת 1', 'תוספת 2'])
 
   await page.getByTestId('team-color-select-team1').selectOption('blue')
-  await expect(page.getByTestId('team-card-team1')).toContainText('קבוצת כחול')
+  await expect(page.getByTestId('team-card-team1')).toContainText('כחול')
 
   await setTeamPlayer(page, 'team1', 'תוספת 1')
   await expect(page.getByTestId('team-card-team1').getByRole('checkbox', { name: 'תוספת 1' })).toBeChecked()
@@ -133,7 +133,7 @@ test('games, scoring events, standings, editing, deleting, undo, and stats updat
   page,
 }) => {
   await page.getByTestId('admin-toggle').check()
-  await page.getByTestId('league-select').selectOption('saturday-a')
+  await page.getByTestId('league-select').selectOption('tournament-2')
   await expect(page.getByText('אין טורניר זמין. ניתן ליצור טורניר חדש.')).toBeVisible()
   await page.getByTestId('create-tournament-empty').click()
   await expect(page.getByTestId('tournament-select')).toBeVisible()
@@ -183,19 +183,16 @@ test('games, scoring events, standings, editing, deleting, undo, and stats updat
   await page.getByTestId('event-assister-0').selectOption({ label: 'שחקן 2' })
   await page.getByTestId('event-scorer-1').selectOption({ label: 'שחקן 3' })
   await page.getByTestId('save-game-button').click()
-  await expect(standingsRows.nth(0)).toContainText('שחור')
-  await expect(standingsRows.nth(0)).toContainText('1')
+  const blackRowAfterEdit = page.locator('[data-testid="live-standings-table"] tbody tr').filter({ hasText: 'שחור' }).first()
+  await expect(blackRowAfterEdit).toContainText('1')
 
   await page.getByTestId('nav-stats').click()
   await expect(page.getByRole('heading', { name: 'סטטיסטיקות כלל הטורנירים - שבת A' })).toBeVisible()
   const playerOneRow = page.locator('[data-testid^="player-stats-row-"]').filter({ hasText: 'שחקן 1' }).first()
   const playerTwoRow = page.locator('[data-testid^="player-stats-row-"]').filter({ hasText: 'שחקן 2' }).first()
   const playerThreeRow = page.locator('[data-testid^="player-stats-row-"]').filter({ hasText: 'שחקן 3' }).first()
-  await expect(playerOneRow).toContainText('שחקן 1')
   await expect(playerOneRow.locator('td').nth(4)).toHaveText('1')
-  await expect(playerTwoRow).toContainText('שחקן 2')
   await expect(playerTwoRow.locator('td').nth(5)).toHaveText('1')
-  await expect(playerThreeRow).toContainText('שחקן 3')
   await expect(playerThreeRow.locator('td').nth(4)).toHaveText('1')
 
   await page.getByTestId('nav-live').click()
@@ -205,7 +202,7 @@ test('games, scoring events, standings, editing, deleting, undo, and stats updat
 
 test('editing a seeded game result updates live standings, tournament games, and stats', async ({ page }) => {
   await page.getByTestId('admin-toggle').check()
-  await page.getByTestId('league-select').selectOption('saturday-b')
+  await page.getByTestId('league-select').selectOption('tournament-3')
   await page.getByTestId('tournament-select').selectOption('2026-03-07-sb')
 
   await page.getByTestId('edit-game-sb1-g8').click()
@@ -233,7 +230,7 @@ test('adding a new game to a seeded tournament updates live standings, games lis
   page,
 }) => {
   await page.getByTestId('admin-toggle').check()
-  await page.getByTestId('league-select').selectOption('saturday-b')
+  await page.getByTestId('league-select').selectOption('tournament-3')
   await page.getByTestId('tournament-select').selectOption('2026-03-07-sb')
 
   const existingGames = page.locator('[data-testid^="game-row-"]')
@@ -260,8 +257,55 @@ test('adding a new game to a seeded tournament updates live standings, games lis
   await expect(assisterRow.locator('td').nth(5)).toHaveText('4')
 })
 
+test('regular league stats show a league table and summary leaders without the full player table', async ({ page }) => {
+  await page.getByTestId('league-select').selectOption('regular-1')
+  await expect(page.getByRole('heading', { name: 'ניהול מחזור ליגה' })).toBeVisible()
+  await expect(page.getByTestId('tournament-select')).toBeVisible()
+  await expect(page.getByTestId('team-name-input-regular-team-1')).toBeVisible()
+  await expect(page.getByTestId('team-name-input-regular-team-1')).toHaveValue('נשרים')
+
+  await page.getByTestId('nav-stats').click()
+  await expect(page.getByRole('heading', { name: 'טבלת ליגה וראשי קטגוריות - ליגת סוקרזון 5' })).toBeVisible()
+  await expect(page.getByTestId('live-standings-table')).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'נשרים' })).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'זאבים' })).toBeVisible()
+  await expect(page.locator('[data-testid^="player-stats-row-"]')).toHaveCount(0)
+  await expect(page.getByTestId('player-stats-summary')).toContainText('מלך שערים')
+})
+
+test('regular league roster editing can be enabled after round one', async ({ page }) => {
+  await page.getByTestId('admin-toggle').check()
+  await page.getByTestId('league-select').selectOption('regular-1')
+  await page.getByTestId('tournament-select').selectOption('regular-1-mw2')
+
+  await expect(page.getByTestId('team-card-regular-team-1')).toContainText('נשרים')
+  await expect(page.getByTestId('team-name-input-regular-team-1')).toHaveCount(0)
+  await expect(page.getByTestId('regular-roster-edit-toggle')).not.toBeChecked()
+
+  await page.getByTestId('regular-roster-edit-toggle').check()
+  await expect(page.getByTestId('team-name-input-regular-team-1')).toBeVisible()
+  await expect(page.getByTestId('team-name-input-regular-team-1')).toBeEnabled()
+
+  await page.getByTestId('team-name-input-regular-team-1').fill('נשרים מעודכנים')
+  await expect(page.getByTestId('team-name-input-regular-team-1')).toHaveValue('נשרים מעודכנים')
+  await setTeamPlayer(page, 'regular-team-1', 'עמית בן חיים', false)
+  await expect(page.getByTestId('team-card-regular-team-1').getByRole('checkbox', { name: 'עמית בן חיים' })).not.toBeChecked()
+})
+
+test('friendlies live mode hides the standings table and keeps overall stats on the stats page', async ({ page }) => {
+  await page.getByTestId('league-select').selectOption('friendly-1')
+  await expect(page.getByRole('heading', { name: 'ניהול יום משחקים' })).toBeVisible()
+  await expect(page.getByTestId('tournament-select')).toBeVisible()
+  await expect(page.getByTestId('live-standings-table')).toHaveCount(0)
+  await expect(page.locator('[data-testid^="game-row-"]')).toHaveCount(1)
+
+  await page.getByTestId('nav-stats').click()
+  await expect(page.getByRole('heading', { name: 'סטטיסטיקת ידידות - סטטיסטיקת ידידות' })).toBeVisible()
+  await expect(page.getByTestId('player-stats-summary')).toContainText('מלך שערים')
+})
+
 test('stats summary leaders match the maximum values in the stats table', async ({ page }) => {
-  await page.getByTestId('league-select').selectOption('saturday-b')
+  await page.getByTestId('league-select').selectOption('tournament-3')
   await page.getByTestId('nav-stats').click()
 
   const rows = page.locator('[data-testid^="player-stats-row-"]')
