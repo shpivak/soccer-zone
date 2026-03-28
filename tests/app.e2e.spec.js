@@ -46,7 +46,10 @@ const setScore = async (page, side, score) => {
 test.beforeEach(async ({ page }) => {
   await resetTestData()
   await page.addInitScript(() => {
-    localStorage.clear()
+    if (!sessionStorage.getItem('soccer-zone-e2e-bootstrapped')) {
+      localStorage.clear()
+      sessionStorage.setItem('soccer-zone-e2e-bootstrapped', 'true')
+    }
     localStorage.setItem('soccer-zone-active-dataset', 'test')
   })
   await page.goto('/')
@@ -56,6 +59,7 @@ test.afterEach(async ({ page }) => {
   if (!page.isClosed()) {
     await page.evaluate(() => {
       localStorage.clear()
+      sessionStorage.clear()
     })
     await page.close()
   }
@@ -126,6 +130,64 @@ test('management actions clear the selected league and can restore its mock data
 
   await page.getByTestId('nav-stats').click()
   await expect(page.locator('[data-testid^="player-stats-row-"]')).not.toHaveCount(0)
+})
+
+test('player and team changes persist after refresh and league switching', async ({ page }) => {
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await expect(page.getByText('אין טורניר זמין. ניתן ליצור טורניר חדש.')).toBeVisible()
+
+  await page.getByTestId('create-tournament-empty').click()
+  await addPlayer(page, 'שחקן התמדה')
+  await setTeamPlayer(page, 'team1', 'שחקן התמדה')
+  await page.getByTestId('team-color-select-team1').selectOption('white')
+  await expect(page.getByTestId('team-card-team1')).toContainText('לבן')
+  await expect(page.getByTestId('team-card-team1').getByText('שחקן התמדה')).toBeVisible()
+
+  await page.reload()
+  await expect(page.getByTestId('league-select')).toHaveValue('tournament-2')
+  await expect(page.getByTestId('team-card-team1')).toContainText('לבן')
+  await expect(page.getByTestId('team-card-team1').getByText('שחקן התמדה')).toBeVisible()
+
+  await page.getByTestId('league-select').selectOption('tournament-1')
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.reload()
+
+  await expect(page.getByTestId('team-card-team1')).toContainText('לבן')
+  await expect(page.getByTestId('team-card-team1').getByText('שחקן התמדה')).toBeVisible()
+})
+
+test('saved tournament games persist after refresh and league switching', async ({ page }) => {
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await expect(page.getByText('אין טורניר זמין. ניתן ליצור טורניר חדש.')).toBeVisible()
+  await page.getByTestId('create-tournament-empty').click()
+
+  await addPlayers(page, ['שחקן A', 'שחקן B', 'שחקן C', 'שחקן D', 'שחקן E', 'שחקן F'])
+  await setTeamPlayer(page, 'team1', 'שחקן A')
+  await setTeamPlayer(page, 'team1', 'שחקן B')
+  await setTeamPlayer(page, 'team2', 'שחקן C')
+  await setTeamPlayer(page, 'team2', 'שחקן D')
+  await setTeamPlayer(page, 'team3', 'שחקן E')
+  await setTeamPlayer(page, 'team3', 'שחקן F')
+
+  await page.getByTestId('game-team-a-select').selectOption('team1')
+  await page.getByTestId('game-team-b-select').selectOption('team2')
+  await setScore(page, 'a', 1)
+  await setScore(page, 'b', 0)
+  await page.getByTestId('event-scorer-0').selectOption({ label: 'שחקן A' })
+  await page.getByTestId('event-assister-0').selectOption({ label: 'שחקן B' })
+  await page.getByTestId('save-game-button').click()
+  await expect(page.getByText('שחור 1 - 0 צהוב')).toBeVisible()
+
+  await page.reload()
+  await expect(page.getByText('שחור 1 - 0 צהוב')).toBeVisible()
+
+  await page.getByTestId('league-select').selectOption('tournament-1')
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.reload()
+
+  await expect(page.getByText('שחור 1 - 0 צהוב')).toBeVisible()
+  await page.getByTestId('nav-stats').click()
+  await expect(page.locator('[data-testid^="player-stats-row-"]').filter({ hasText: 'שחקן A' }).first().locator('td').nth(4)).toHaveText('1')
 })
 
 test('team builder enforces unique players, max seven players, and team color changes for tournament leagues', async ({

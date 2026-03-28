@@ -185,6 +185,27 @@ const LiveTournament = ({ adminMode }) => {
     ])
   }
 
+  const handleAddFriendlyTeam = () => {
+    if (!adminMode || !league || league.type !== LEAGUE_TYPES.friendly || !selectedTournament) return
+    if ((selectedTournament.teams?.length ?? 0) >= APP_CONFIG.friendly.maxTeams) {
+      setTeamBuilderMessage(`אפשר להגדיר עד ${APP_CONFIG.friendly.maxTeams} קבוצות במשחקי ידידות.`)
+      return
+    }
+
+    setTeamBuilderMessage('')
+    updateSelectedTournament((tournament) => ({
+      teams: [
+        ...tournament.teams,
+        {
+          id: `friendly-team-${Date.now()}`,
+          name: '',
+          color: APP_CONFIG.allowedTeamColors[tournament.teams.length % APP_CONFIG.allowedTeamColors.length] ?? 'gray',
+          players: [],
+        },
+      ],
+    }))
+  }
+
   const handleAddPlayer = () => {
     if (!adminMode || !newPlayerName.trim()) return
     const roleIndex = leaguePlayers.length
@@ -323,6 +344,29 @@ const LiveTournament = ({ adminMode }) => {
             message={teamBuilderMessage}
             allowColorEdit={false}
             allowNameEdit={isRegularSetupEditable}
+          />
+        </section>
+      ) : league.type === LEAGUE_TYPES.friendly ? (
+        <section className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-lg font-bold">בניית קבוצות ידידות</h2>
+            <button
+              onClick={handleAddFriendlyTeam}
+              disabled={!adminMode}
+              data-testid="add-friendly-team"
+              className="rounded-xl border px-3 py-2 text-sm disabled:opacity-40"
+            >
+              הוסף קבוצה
+            </button>
+          </div>
+          <TeamBuilder
+            teams={selectedTournament?.teams ?? []}
+            players={leaguePlayers}
+            disabled={!adminMode}
+            onMovePlayer={handleMovePlayer}
+            onChangeTeamColor={handleChangeTeamColor}
+            onTogglePlayerRole={handleTogglePlayerRole}
+            message={teamBuilderMessage}
           />
         </section>
       ) : (
