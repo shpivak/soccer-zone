@@ -1,8 +1,8 @@
-import { useState } from 'react'
-import { APP_CONFIG } from './config'
+import { useMemo, useState } from 'react'
 import { useAppContext } from './hooks/useAppContext'
 import LiveTournament from './pages/LiveTournament'
 import Stats from './pages/Stats'
+import { getLeagueTypeLabel } from './utils/leagueUtils'
 import { AVAILABLE_DATASETS } from './utils/storageConfig'
 
 function App() {
@@ -13,12 +13,19 @@ function App() {
     isLoading,
     isResetEnabled,
     clearActiveLeagueData,
+    leagues,
     resetActiveLeagueToMockData,
     setActiveDataset,
     setActiveLeagueId,
+    setLeagues,
   } = useAppContext()
   const [page, setPage] = useState('live')
   const [adminMode, setAdminMode] = useState(true)
+
+  const activeLeague = useMemo(
+    () => leagues.find((league) => league.id === activeLeagueId) ?? null,
+    [activeLeagueId, leagues],
+  )
 
   const handleDatasetChange = (event) => {
     const next = event.target.value
@@ -30,27 +37,37 @@ function App() {
   }
 
   const handleClearLeague = async () => {
-    const league = APP_CONFIG.leagues.find((item) => item.id === activeLeagueId)
-    const approved = window.confirm(`למחוק את כל השחקנים והטורנירים של הליגה ${league?.name ?? activeLeagueId}?`)
+    const approved = window.confirm(`למחוק את כל הנתונים של הליגה ${activeLeague?.name ?? activeLeagueId}?`)
     if (!approved) return
     await clearActiveLeagueData()
   }
 
   const handleResetLeagueToMockData = async () => {
-    const league = APP_CONFIG.leagues.find((item) => item.id === activeLeagueId)
-    const approved = window.confirm(`לאפס את הליגה ${league?.name ?? activeLeagueId} לדאטת ה-mock המקורית?`)
+    const approved = window.confirm(`לאפס את הליגה ${activeLeague?.name ?? activeLeagueId} לדאטת ה-mock המקורית?`)
     if (!approved) return
     await resetActiveLeagueToMockData()
   }
 
+  const handleLeagueMetaChange = (field, value) => {
+    if (!activeLeague) return
+    setLeagues((current) =>
+      current.map((league) =>
+        league.id === activeLeague.id
+          ? {
+              ...league,
+              [field]: value,
+            }
+          : league,
+      ),
+    )
+  }
+
   return (
-    <main className="mx-auto min-h-screen w-full max-w-3xl p-3 pb-10 md:p-6">
+    <main className="mx-auto min-h-screen w-full max-w-5xl p-3 pb-10 md:p-6">
       <header className="mb-4 rounded-2xl bg-white p-4 shadow-sm">
         <h1 className="text-xl font-bold">מעקב ליגת כדורגל חובבנית</h1>
-        <p className="mt-1 text-sm text-gray-600">ניהול טורניר חי + סטטיסטיקות מצטברות</p>
-        <p className="mt-1 text-sm text-gray-600">
-          בחירת ליגה מסננת את רשימת הטורנירים במצב החי ואת דף הסטטיסטיקות.
-        </p>
+        <p className="mt-1 text-sm text-gray-600">ניהול ליגות טורנירים, ליגה סדירה ומשחקי ידידות</p>
+        <p className="mt-1 text-sm text-gray-600">כל ליגה מוגדרת לפי סוג הליגה שלה ונטענת עם סטטיסטיקות מתאימות.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             onClick={() => setPage('live')}
@@ -73,9 +90,9 @@ function App() {
             data-testid="league-select"
             className="rounded-xl border px-3 py-2 text-sm"
           >
-            {APP_CONFIG.leagues.map((league) => (
+            {leagues.map((league) => (
               <option key={league.id} value={league.id}>
-                {league.name}
+                {league.name} ({getLeagueTypeLabel(league.type)})
               </option>
             ))}
           </select>
@@ -83,7 +100,10 @@ function App() {
       </header>
 
       {error ? (
-        <section className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" data-testid="storage-error">
+        <section
+          className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          data-testid="storage-error"
+        >
           {error}
         </section>
       ) : null}
@@ -100,9 +120,7 @@ function App() {
 
       <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm" data-testid="management-panel">
         <h2 className="text-base font-bold">אזור ניהול וכלי מערכת</h2>
-        <p className="mt-1 text-sm text-gray-600">
-          מצב ניהול פעיל כאן כברירת מחדל. פעולות הניהול למטה עובדות על הליגה הנבחרת בלבד.
-        </p>
+        <p className="mt-1 text-sm text-gray-600">מצב ניהול פעיל כאן כברירת מחדל. פעולות הניהול למטה עובדות על הליגה הנבחרת בלבד.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <label className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">
             <span>Admin mode</span>
@@ -144,6 +162,30 @@ function App() {
             שחזר mock data
           </button>
         </div>
+
+        {activeLeague ? (
+          <div className="mt-4 grid gap-3 rounded-xl border p-3 md:grid-cols-3">
+            <input
+              value={activeLeague.name}
+              onChange={(event) => handleLeagueMetaChange('name', event.target.value)}
+              disabled={!adminMode}
+              data-testid="league-name-input"
+              className="rounded-xl border px-3 py-2 text-sm"
+              placeholder="שם ליגה"
+            />
+            <input
+              value={activeLeague.seasonLabel ?? ''}
+              onChange={(event) => handleLeagueMetaChange('seasonLabel', event.target.value)}
+              disabled={!adminMode}
+              data-testid="league-season-input"
+              className="rounded-xl border px-3 py-2 text-sm"
+              placeholder="עונת ליגה"
+            />
+            <div className="rounded-xl border px-3 py-2 text-sm text-gray-600" data-testid="league-type-label">
+              {getLeagueTypeLabel(activeLeague.type)}
+            </div>
+          </div>
+        ) : null}
       </section>
     </main>
   )

@@ -1,13 +1,32 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { getTeamDisplayName } from '../utils/leagueUtils'
 
-const createEmptyEvent = () => ({ type: 'goal', scorer: '', assister: '' })
-const colorTitle = {
-  black: 'שחור',
-  yellow: 'צהוב',
-  pink: 'ורוד',
-  orange: 'כתום',
-  blue: 'כחול',
-  gray: 'אפור',
+const createGoalEvent = (teamId) => ({ type: 'goal', teamId, scorer: '', assister: '' })
+
+const inferEventTeamId = (event, teams, players, fallbackTeamId) => {
+  if (event.teamId) return event.teamId
+  const scorerTeam = teams.find((team) => team.players.includes(event.scorer))
+  if (scorerTeam) return scorerTeam.id
+  return fallbackTeamId
+}
+
+const formatClock = (seconds) => {
+  const minutes = Math.floor(seconds / 60)
+  const remainder = seconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
+}
+
+const normalizeEditingEvents = (editingGame, teams, players) => {
+  if (!editingGame) return []
+
+  const normalized = []
+  let fallbackForA = 0
+  ;(editingGame.events ?? []).forEach((event) => {
+    const fallbackTeamId = fallbackForA < editingGame.score.a ? editingGame.teamA : editingGame.teamB
+    normalized.push({ ...event, teamId: inferEventTeamId(event, teams, players, fallbackTeamId) })
+    if (fallbackTeamId === editingGame.teamA) fallbackForA += 1
+  })
+  return normalized
 }
 
 const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit, message }) => {
@@ -15,29 +34,69 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
   const [teamB, setTeamB] = useState(editingGame?.teamB ?? teams[1]?.id ?? '')
   const [scoreA, setScoreA] = useState(editingGame?.score.a ?? 0)
   const [scoreB, setScoreB] = useState(editingGame?.score.b ?? 0)
-  const [events, setEvents] = useState(editingGame?.events ?? [])
+  const [events, setEvents] = useState(() => normalizeEditingEvents(editingGame, teams, players))
+  const [clockSeconds, setClockSeconds] = useState(editingGame?.clockSeconds ?? 0)
+  const [isClockRunning, setIsClockRunning] = useState(false)
 
-  const availablePlayers = useMemo(() => {
-    const selectedTeams = teams.filter((team) => team.id === teamA || team.id === teamB)
-    const ids = selectedTeams.flatMap((team) => team.players)
-    return players.filter((player) => ids.includes(player.id))
-  }, [teamA, teamB, teams, players])
+  useEffect(() => {
+    if (!isClockRunning) return undefined
+    const intervalId = window.setInterval(() => {
+      setClockSeconds((current) => current + 1)
+    }, 1000)
+    return () => window.clearInterval(intervalId)
+  }, [isClockRunning])
 
-  const syncEventsCount = (a, b) => {
-    const nextCount = Number(a) + Number(b)
-    setEvents((current) => {
-      if (current.length === nextCount) return current
-      if (current.length > nextCount) return current.slice(0, nextCount)
-      return [...current, ...Array.from({ length: nextCount - current.length }, createEmptyEvent)]
-    })
-  }
+  const teamAPlayers = useMemo(
+    () => players.filter((player) => teams.find((team) => team.id === teamA)?.players.includes(player.id)),
+    [players, teamA, teams],
+  )
+  const teamBPlayers = useMemo(
+    () => players.filter((player) => teams.find((team) => team.id === teamB)?.players.includes(player.id)),
+    [players, teamB, teams],
+  )
 
   const resetForm = () => {
     setScoreA(0)
     setScoreB(0)
     setEvents([])
+    setClockSeconds(0)
+    setIsClockRunning(false)
     setTeamA(teams[0]?.id ?? '')
     setTeamB(teams[1]?.id ?? '')
+  }
+
+  const updateScore = (targetTeamId, delta) => {
+    if (!targetTeamId) return
+    if (targetTeamId === teamA) {
+      if (delta > 0) {
+        setScoreA((current) => current + 1)
+        setEvents((current) => [...current, createGoalEvent(teamA)])
+      } else if (scoreA > 0) {
+        setScoreA((current) => current - 1)
+        setEvents((current) => {
+          const next = [...current]
+          const index = next.map((event) => event.teamId).lastIndexOf(teamA)
+          if (index >= 0) next.splice(index, 1)
+          return next
+        })
+      }
+      return
+    }
+
+    if (targetTeamId === teamB) {
+      if (delta > 0) {
+        setScoreB((current) => current + 1)
+        setEvents((current) => [...current, createGoalEvent(teamB)])
+      } else if (scoreB > 0) {
+        setScoreB((current) => current - 1)
+        setEvents((current) => {
+          const next = [...current]
+          const index = next.map((event) => event.teamId).lastIndexOf(teamB)
+          if (index >= 0) next.splice(index, 1)
+          return next
+        })
+      }
+    }
   }
 
   const handleSave = () => {
@@ -47,8 +106,10 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
       teamA,
       teamB,
       score: { a: Number(scoreA), b: Number(scoreB) },
+      clockSeconds,
       events: events.map((event) => ({
         type: 'goal',
+        teamId: event.teamId,
         scorer: event.scorer,
         ...(event.assister ? { assister: event.assister } : {}),
       })),
@@ -59,107 +120,179 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm">
       <h2 className="mb-3 text-lg font-bold">{editingGame ? 'עריכת משחק' : 'הזנת משחק חדש'}</h2>
-      <div className="grid gap-2 md:grid-cols-2">
-        <select
-          value={teamA}
-          disabled={disabled}
-          onChange={(event) => setTeamA(event.target.value)}
-          data-testid="game-team-a-select"
-          className="rounded-xl border p-3"
-        >
-          {teams.map((team) => (
-            <option key={team.id} value={team.id}>
-              {colorTitle[team.color] ?? team.color}
-            </option>
-          ))}
-        </select>
-        <select
-          value={teamB}
-          disabled={disabled}
-          onChange={(event) => setTeamB(event.target.value)}
-          data-testid="game-team-b-select"
-          className="rounded-xl border p-3"
-        >
-          {teams.map((team) => (
-            <option key={team.id} value={team.id}>
-              {colorTitle[team.color] ?? team.color}
-            </option>
-          ))}
-        </select>
-      </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <input
-          type="number"
-          min="0"
-          value={scoreA}
-          disabled={disabled}
-          onChange={(event) => {
-            setScoreA(event.target.value)
-            syncEventsCount(event.target.value, scoreB)
-          }}
-          data-testid="score-a-input"
-          className="rounded-xl border p-3 text-center text-xl font-bold"
-        />
-        <input
-          type="number"
-          min="0"
-          value={scoreB}
-          disabled={disabled}
-          onChange={(event) => {
-            setScoreB(event.target.value)
-            syncEventsCount(scoreA, event.target.value)
-          }}
-          data-testid="score-b-input"
-          className="rounded-xl border p-3 text-center text-xl font-bold"
-        />
-      </div>
-
-      {events.length > 0 && (
-        <div className="mt-4 space-y-2">
-          <h3 className="font-semibold">אירועי שערים (אופציונלי)</h3>
-          {events.map((event, index) => (
-            <div key={`event-${index}`} className="grid gap-2 rounded-xl border p-2 md:grid-cols-2">
-              <select
-                value={event.scorer}
-                disabled={disabled}
-                onChange={(e) => {
-                  const next = [...events]
-                  next[index] = { ...next[index], scorer: e.target.value }
-                  setEvents(next)
-                }}
-                data-testid={`event-scorer-${index}`}
-                className="rounded-lg border p-2"
-              >
-                <option value="">כובש</option>
-                {availablePlayers.map((player) => (
-                  <option key={player.id} value={player.id}>
-                    {player.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={event.assister}
-                disabled={disabled}
-                onChange={(e) => {
-                  const next = [...events]
-                  next[index] = { ...next[index], assister: e.target.value }
-                  setEvents(next)
-                }}
-                data-testid={`event-assister-${index}`}
-                className="rounded-lg border p-2"
-              >
-                <option value="">מבשל (אופציונלי)</option>
-                {availablePlayers.map((player) => (
-                  <option key={`assist-${player.id}`} value={player.id}>
-                    {player.name}
-                  </option>
-                ))}
-              </select>
+      <div className="rounded-2xl border bg-gray-950 p-4 text-white">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr] md:items-center">
+          <div className="space-y-3 text-center">
+            <select
+              value={teamA}
+              disabled={disabled}
+              onChange={(event) => setTeamA(event.target.value)}
+              data-testid="game-team-a-select"
+              className="w-full rounded-xl border border-white/20 bg-transparent p-2 text-center"
+            >
+              {teams.map((team) => (
+                <option key={team.id} value={team.id} className="text-black">
+                  {getTeamDisplayName(team)}
+                </option>
+              ))}
+            </select>
+            <div className="text-5xl font-black" data-testid="score-a-input">
+              {scoreA}
             </div>
-          ))}
+            <div className="flex justify-center gap-2">
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => updateScore(teamA, 1)}
+                data-testid="score-a-plus"
+                className="rounded-xl bg-white/10 px-4 py-2"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                disabled={disabled || scoreA === 0}
+                onClick={() => updateScore(teamA, -1)}
+                data-testid="score-a-minus"
+                className="rounded-xl bg-white/10 px-4 py-2 disabled:opacity-40"
+              >
+                -
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-3 text-center">
+            <div className="text-sm uppercase tracking-[0.3em] text-white/60">Live</div>
+            <div data-testid="game-timer-display" className="text-4xl font-black">
+              {formatClock(clockSeconds)}
+            </div>
+            <div className="flex justify-center gap-2">
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => setIsClockRunning(true)}
+                data-testid="game-timer-start"
+                className="rounded-xl bg-emerald-500 px-3 py-2 text-sm font-semibold text-black"
+              >
+                Start
+              </button>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => setIsClockRunning(false)}
+                data-testid="game-timer-pause"
+                className="rounded-xl bg-amber-400 px-3 py-2 text-sm font-semibold text-black"
+              >
+                Pause
+              </button>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => {
+                  setIsClockRunning(false)
+                  setClockSeconds(0)
+                }}
+                data-testid="game-timer-reset"
+                className="rounded-xl bg-white/10 px-3 py-2 text-sm"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-3 text-center">
+            <select
+              value={teamB}
+              disabled={disabled}
+              onChange={(event) => setTeamB(event.target.value)}
+              data-testid="game-team-b-select"
+              className="w-full rounded-xl border border-white/20 bg-transparent p-2 text-center"
+            >
+              {teams.map((team) => (
+                <option key={team.id} value={team.id} className="text-black">
+                  {getTeamDisplayName(team)}
+                </option>
+              ))}
+            </select>
+            <div className="text-5xl font-black" data-testid="score-b-input">
+              {scoreB}
+            </div>
+            <div className="flex justify-center gap-2">
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => updateScore(teamB, 1)}
+                data-testid="score-b-plus"
+                className="rounded-xl bg-white/10 px-4 py-2"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                disabled={disabled || scoreB === 0}
+                onClick={() => updateScore(teamB, -1)}
+                data-testid="score-b-minus"
+                className="rounded-xl bg-white/10 px-4 py-2 disabled:opacity-40"
+              >
+                -
+              </button>
+            </div>
+          </div>
         </div>
-      )}
+      </div>
+
+      {events.length > 0 ? (
+        <div className="mt-4 space-y-2">
+          <h3 className="font-semibold">אירועי שערים</h3>
+          {events.map((event, index) => {
+            const eventPlayers = event.teamId === teamA ? teamAPlayers : teamBPlayers
+            return (
+              <div key={`event-${index}`} className="grid gap-2 rounded-xl border p-2 md:grid-cols-[180px_1fr_1fr]">
+                <div className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold">
+                  {getTeamDisplayName(teams.find((team) => team.id === event.teamId))}
+                </div>
+                <select
+                  value={event.scorer}
+                  disabled={disabled}
+                  onChange={(e) => {
+                    const next = [...events]
+                    next[index] = { ...next[index], scorer: e.target.value }
+                    setEvents(next)
+                  }}
+                  data-testid={`event-scorer-${index}`}
+                  className="rounded-lg border p-2"
+                >
+                  <option value="">כובש</option>
+                  {eventPlayers.map((player) => (
+                    <option key={player.id} value={player.id}>
+                      {player.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={event.assister}
+                  disabled={disabled}
+                  onChange={(e) => {
+                    const next = [...events]
+                    next[index] = { ...next[index], assister: e.target.value }
+                    setEvents(next)
+                  }}
+                  data-testid={`event-assister-${index}`}
+                  className="rounded-lg border p-2"
+                >
+                  <option value="">מבשל (אופציונלי)</option>
+                  {eventPlayers.map((player) => (
+                    <option key={`assist-${player.id}`} value={player.id}>
+                      {player.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )
+          })}
+        </div>
+      ) : null}
 
       {message ? (
         <p data-testid="game-input-message" className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -176,7 +309,7 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
         >
           {editingGame ? 'שמירת עדכון' : 'שמירת משחק'}
         </button>
-        {editingGame && (
+        {editingGame ? (
           <button
             disabled={disabled}
             onClick={() => {
@@ -188,7 +321,7 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
           >
             ביטול
           </button>
-        )}
+        ) : null}
       </div>
     </section>
   )
