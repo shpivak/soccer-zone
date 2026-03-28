@@ -12,12 +12,34 @@ const addPlayers = async (page, names) => {
   }
 }
 
-const setTeamPlayer = async (page, teamId, playerName, checked = true) => {
-  const checkbox = page.getByTestId(`team-card-${teamId}`).getByRole('checkbox', { name: playerName })
-  if (checked) {
-    await checkbox.check()
-  } else {
-    await checkbox.uncheck()
+const dragPlayer = async (page, playerName, targetTestId) => {
+  const source = page.locator('[data-testid^="player-chip-"]').filter({ hasText: playerName }).first()
+  const target = page.getByTestId(targetTestId)
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer())
+  await source.dispatchEvent('dragstart', { dataTransfer })
+  await target.dispatchEvent('dragover', { dataTransfer })
+  await target.dispatchEvent('drop', { dataTransfer })
+}
+
+const setTeamPlayer = async (page, teamId, playerName, assigned = true) => {
+  await dragPlayer(page, playerName, assigned ? `team-card-${teamId}` : 'team-card-bench')
+}
+
+const setScore = async (page, side, score) => {
+  const display = page.getByTestId(`score-${side}-input`)
+  const plus = page.getByTestId(`score-${side}-plus`)
+  const minus = page.getByTestId(`score-${side}-minus`)
+  const current = Number((await display.textContent())?.trim() ?? '0')
+
+  if (current < score) {
+    for (let index = current; index < score; index += 1) {
+      await plus.click()
+    }
+    return
+  }
+
+  for (let index = current; index > score; index -= 1) {
+    await minus.click()
   }
 }
 
@@ -77,6 +99,7 @@ test('management controls are separated and empty tournament leagues can still s
   await page.getByTestId('create-tournament-empty').click()
   await expect(page.getByTestId('tournament-select')).toBeVisible()
   await addPlayer(page, 'שחקן ליגת שבת')
+  await setTeamPlayer(page, 'team1', 'שחקן ליגת שבת')
   await expect(page.getByTestId('team-card-team1').getByText('שחקן ליגת שבת')).toBeVisible()
 
   await page.getByTestId('league-select').selectOption('tournament-1')
@@ -115,18 +138,18 @@ test('team builder enforces unique players, max seven players, and team color ch
   await expect(page.getByTestId('team-card-team1')).toContainText('כחול')
 
   await setTeamPlayer(page, 'team1', 'תוספת 1')
-  await expect(page.getByTestId('team-card-team1').getByRole('checkbox', { name: 'תוספת 1' })).toBeChecked()
+  await expect(page.getByTestId('team-card-team1').getByText('תוספת 1')).toBeVisible()
 
-  await page.getByTestId('team-card-team1').getByRole('checkbox', { name: 'רועי בן דוד' }).click()
-  await expect(page.getByTestId('team-builder-message')).toContainText(
-    'שחקן לא יכול להיות משויך לשתי קבוצות באותו טורניר.',
-  )
-  await expect(page.getByTestId('team-card-team1').getByRole('checkbox', { name: 'רועי בן דוד' })).not.toBeChecked()
-  await expect(page.getByTestId('team-card-team2').getByRole('checkbox', { name: 'רועי בן דוד' })).toBeChecked()
+  await setTeamPlayer(page, 'team1', 'תוספת 1', false)
+  await expect(page.getByTestId('team-card-bench').getByText('תוספת 1')).toBeVisible()
 
-  await page.getByTestId('team-card-team1').getByRole('checkbox', { name: 'תוספת 2' }).click()
+  await setTeamPlayer(page, 'team1', 'רועי בן דוד')
+  await expect(page.getByTestId('team-card-team1').getByText('רועי בן דוד')).toBeVisible()
+  await expect(page.getByTestId('team-card-team2').getByText('רועי בן דוד')).toHaveCount(0)
+
+  await setTeamPlayer(page, 'team1', 'תוספת 2')
   await expect(page.getByTestId('team-builder-message')).toContainText('אי אפשר להוסיף יותר מ-7 שחקנים לקבוצה.')
-  await expect(page.getByTestId('team-card-team1').getByRole('checkbox', { name: 'תוספת 2' })).not.toBeChecked()
+  await expect(page.getByTestId('team-card-team1').getByText('תוספת 2')).toHaveCount(0)
 })
 
 test('games, scoring events, standings, editing, deleting, undo, and stats updates work end to end', async ({
@@ -147,8 +170,8 @@ test('games, scoring events, standings, editing, deleting, undo, and stats updat
 
   await page.getByTestId('game-team-a-select').selectOption('team1')
   await page.getByTestId('game-team-b-select').selectOption('team2')
-  await page.getByTestId('score-a-input').fill('2')
-  await page.getByTestId('score-b-input').fill('1')
+  await setScore(page, 'a', 2)
+  await setScore(page, 'b', 1)
   await page.getByTestId('event-scorer-0').selectOption({ label: 'שחקן 1' })
   await page.getByTestId('event-assister-0').selectOption({ label: 'שחקן 2' })
   await page.getByTestId('event-scorer-1').selectOption({ label: 'שחקן 1' })
@@ -161,14 +184,14 @@ test('games, scoring events, standings, editing, deleting, undo, and stats updat
   await expect(page.getByText('שחור 2 - 1 צהוב')).toBeVisible()
 
   await page.getByRole('button', { name: 'עריכה' }).first().click()
-  await page.getByTestId('score-a-input').fill('3')
+  await setScore(page, 'a', 3)
   await page.getByTestId('cancel-edit-game').click()
   await expect(page.getByText('שחור 2 - 1 צהוב')).toBeVisible()
 
   await page.getByTestId('game-team-a-select').selectOption('team3')
   await page.getByTestId('game-team-b-select').selectOption('team2')
-  await page.getByTestId('score-a-input').fill('1')
-  await page.getByTestId('score-b-input').fill('0')
+  await setScore(page, 'a', 1)
+  await setScore(page, 'b', 0)
   await page.getByTestId('event-scorer-0').selectOption({ label: 'שחקן 5' })
   await page.getByTestId('save-game-button').click()
   await expect(page.getByText('ורוד 1 - 0 צהוב')).toBeVisible()
@@ -177,8 +200,8 @@ test('games, scoring events, standings, editing, deleting, undo, and stats updat
   await expect(page.getByText('ורוד 1 - 0 צהוב')).toHaveCount(0)
 
   await page.getByRole('button', { name: 'עריכה' }).first().click()
-  await page.getByTestId('score-a-input').fill('1')
-  await page.getByTestId('score-b-input').fill('1')
+  await setScore(page, 'a', 1)
+  await setScore(page, 'b', 1)
   await page.getByTestId('event-scorer-0').selectOption({ label: 'שחקן 1' })
   await page.getByTestId('event-assister-0').selectOption({ label: 'שחקן 2' })
   await page.getByTestId('event-scorer-1').selectOption({ label: 'שחקן 3' })
@@ -206,8 +229,8 @@ test('editing a seeded game result updates live standings, tournament games, and
   await page.getByTestId('tournament-select').selectOption('2026-03-07-sb')
 
   await page.getByTestId('edit-game-sb1-g8').click()
-  await page.getByTestId('score-a-input').fill('1')
-  await page.getByTestId('score-b-input').fill('0')
+  await setScore(page, 'a', 1)
+  await setScore(page, 'b', 0)
   await page.getByTestId('event-scorer-0').selectOption({ label: 'יובל חן' })
   await page.getByTestId('event-assister-0').selectOption({ label: 'גל ישראל' })
   await page.getByTestId('save-game-button').click()
@@ -239,8 +262,8 @@ test('adding a new game to a seeded tournament updates live standings, games lis
 
   await page.getByTestId('game-team-a-select').selectOption('team1')
   await page.getByTestId('game-team-b-select').selectOption('team3')
-  await page.getByTestId('score-a-input').fill('1')
-  await page.getByTestId('score-b-input').fill('0')
+  await setScore(page, 'a', 1)
+  await setScore(page, 'b', 0)
   await page.getByTestId('event-scorer-0').selectOption({ label: 'יואב כהן' })
   await page.getByTestId('event-assister-0').selectOption({ label: 'אדם פרץ' })
   await page.getByTestId('save-game-button').click()
@@ -289,7 +312,8 @@ test('regular league roster editing can be enabled after round one', async ({ pa
   await page.getByTestId('team-name-input-regular-team-1').fill('נשרים מעודכנים')
   await expect(page.getByTestId('team-name-input-regular-team-1')).toHaveValue('נשרים מעודכנים')
   await setTeamPlayer(page, 'regular-team-1', 'עמית בן חיים', false)
-  await expect(page.getByTestId('team-card-regular-team-1').getByRole('checkbox', { name: 'עמית בן חיים' })).not.toBeChecked()
+  await expect(page.getByTestId('team-card-regular-team-1').getByText('עמית בן חיים')).toHaveCount(0)
+  await expect(page.getByTestId('team-card-bench').getByText('עמית בן חיים')).toBeVisible()
 })
 
 test('friendlies live mode hides the standings table and keeps overall stats on the stats page', async ({ page }) => {

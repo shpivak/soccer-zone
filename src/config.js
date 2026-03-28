@@ -22,5 +22,5 @@ export const APP_CONFIG = {
     loss: 0,
   },
   teamColors: ['black', 'yellow', 'pink'],
-  allowedTeamColors: ['black', 'yellow', 'pink', 'orange', 'blue', 'gray'],
+  allowedTeamColors: ['black', 'yellow', 'pink', 'orange', 'blue', 'gray', 'white'],
 }

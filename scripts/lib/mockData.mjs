@@ -19,10 +19,14 @@ const tournamentLeagueIdMap = {
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const mapLeagueId = (leagueId) => tournamentLeagueIdMap[leagueId] ?? leagueId
+const roleFlagsForIndex = (index) => ({
+  isOffense: index % 2 === 0 || index % 7 === 0,
+  isDefense: index % 2 === 1 || index % 7 === 0,
+})
+
 const withPlayerRoles = (player, index) => ({
   ...player,
-  isOffense: index % 2 === 0,
-  isDefense: index % 3 === 0,
+  ...roleFlagsForIndex(index),
 })
 
 const migrateTeam = (team, index) => ({
@@ -77,8 +81,7 @@ const regularPlayers = [
   id: `regular-p${index + 1}`,
   name,
   leagueId: regularLeagueId,
-  isOffense: index % 2 === 0,
-  isDefense: index % 2 === 1 || index % 5 === 0,
+  ...roleFlagsForIndex(index),
 }))
 
 const regularLeagueTeams = [
@@ -159,8 +162,7 @@ const friendlyPlayers = ['אדם לוי', 'ניר דיין', 'עומר זיו', 
   id: `friendly-p${index + 1}`,
   name,
   leagueId: friendlyLeagueId,
-  isOffense: index % 2 === 0,
-  isDefense: index % 3 === 0,
+  ...roleFlagsForIndex(index),
 }))
 
 const friendlySessions = [

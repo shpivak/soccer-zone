@@ -76,6 +76,20 @@ const normalizedTeamNames = {
 
 const normalizePlayerName = (name) => placeholderPlayerNames[name] ?? name
 const normalizeTeamName = (name) => normalizedTeamNames[name] ?? name
+const normalizePlayerRoles = (player) => {
+  if (player.isOffense === true || player.isDefense === true) {
+    return {
+      isOffense: player.isOffense === true,
+      isDefense: player.isDefense === true,
+    }
+  }
+
+  const numericId = Number(String(player.id).replace(/\D/g, '')) || 0
+  return {
+    isOffense: numericId % 2 === 0,
+    isDefense: numericId % 2 === 1,
+  }
+}
 
 const migrateLeague = (league) => ({
   id: league.id,
@@ -99,8 +113,7 @@ const migratePlayer = (player) => ({
   ...player,
   name: normalizePlayerName(player.name),
   leagueId: normalizeLeagueId(player.leagueId),
-  isOffense: player.isOffense === true,
-  isDefense: player.isDefense === true,
+  ...normalizePlayerRoles(player),
 })
 
 const migrateTournament = (tournament, index) => ({

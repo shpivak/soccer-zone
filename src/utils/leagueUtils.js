@@ -52,6 +52,7 @@ const colorLabel = {
   orange: 'כתום',
   blue: 'כחול',
   gray: 'אפור',
+  white: 'לבן',
 }
 
 const numberFormatter = new Intl.NumberFormat('en', { style: 'decimal' })

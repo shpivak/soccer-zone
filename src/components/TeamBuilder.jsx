@@ -9,6 +9,7 @@ const colorLabel = {
   orange: 'כתום',
   blue: 'כחול',
   gray: 'אפור',
+  white: 'לבן',
 }
 
 const colorClass = {
@@ -18,6 +19,7 @@ const colorClass = {
   orange: 'bg-orange-50 border-orange-300',
   blue: 'bg-blue-50 border-blue-300',
   gray: 'bg-gray-50 border-gray-300',
+  white: 'bg-white border-gray-300',
 }
 
 const PlayerChip = ({ player, sourceTeamId, disabled, onTogglePlayerRole }) => (
@@ -40,7 +42,7 @@ const PlayerChip = ({ player, sourceTeamId, disabled, onTogglePlayerRole }) => (
           className={`rounded-md px-2 py-1 text-xs ${player.isOffense ? 'bg-emerald-100' : 'bg-gray-100'}`}
           data-testid={`player-offense-${player.id}`}
         >
-          ⚽
+          ⚔
         </button>
         <button
           type="button"

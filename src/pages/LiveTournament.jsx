@@ -108,7 +108,15 @@ const LiveTournament = ({ adminMode }) => {
   const handleTogglePlayerRole = (playerId, field) => {
     if (!adminMode) return
     setPlayers((current) =>
-      current.map((player) => (player.id === playerId ? { ...player, [field]: !player[field] } : player)),
+      current.map((player) => {
+        if (player.id !== playerId) return player
+        const nextValue = !player[field]
+        const siblingField = field === 'isOffense' ? 'isDefense' : 'isOffense'
+        if (!nextValue && player[siblingField] !== true) {
+          return player
+        }
+        return { ...player, [field]: nextValue }
+      }),
     )
   }
 
@@ -179,7 +187,14 @@ const LiveTournament = ({ adminMode }) => {
 
   const handleAddPlayer = () => {
     if (!adminMode || !newPlayerName.trim()) return
-    const nextPlayer = { id: `p${Date.now()}`, name: newPlayerName.trim(), leagueId: activeLeagueId }
+    const roleIndex = leaguePlayers.length
+    const nextPlayer = {
+      id: `p${Date.now()}`,
+      name: newPlayerName.trim(),
+      leagueId: activeLeagueId,
+      isOffense: roleIndex % 2 === 0 || roleIndex % 7 === 0,
+      isDefense: roleIndex % 2 === 1 || roleIndex % 7 === 0,
+    }
     setPlayers((current) => [...current, nextPlayer])
     setNewPlayerName('')
   }
