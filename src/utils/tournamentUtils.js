@@ -84,6 +84,8 @@ export const getTournamentWinnerTeamId = (session, pointsConfig) => {
 const basePlayerStats = (player) => ({
   playerId: player.id,
   name: player.name,
+  isOffense: player.isOffense === true,
+  isDefense: player.isDefense === true,
   sessionsParticipated: 0,
   sessionsWon: 0,
   totalGamesWon: 0,
@@ -185,7 +187,7 @@ export const getLeaders = (playerStats) => {
   const sortedScorers = [...playerStats].sort((a, b) => b.goals - a.goals || b.assists - a.assists)
   const sortedAssisters = [...playerStats].sort((a, b) => b.assists - a.assists || b.goals - a.goals)
   const sortedDefenders = [...playerStats]
-    .filter((item) => item.gamesPlayed > 0)
+    .filter((item) => item.gamesPlayed > 0 && item.isDefense)
     .sort((a, b) => a.defenderRatio - b.defenderRatio || b.gamesPlayed - a.gamesPlayed)
 
   return {

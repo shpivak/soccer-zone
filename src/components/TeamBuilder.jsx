@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { APP_CONFIG } from '../config'
 import { getTeamDisplayName } from '../utils/leagueUtils'
 
@@ -19,80 +20,172 @@ const colorClass = {
   gray: 'bg-gray-50 border-gray-300',
 }
 
+const PlayerChip = ({ player, sourceTeamId, disabled, onTogglePlayerRole }) => (
+  <div
+    draggable={!disabled}
+    onDragStart={(event) => {
+      event.dataTransfer.setData('text/plain', JSON.stringify({ playerId: player.id, sourceTeamId }))
+      event.dataTransfer.effectAllowed = 'move'
+    }}
+    className="rounded-xl border bg-white p-2 text-sm shadow-sm"
+    data-testid={`player-chip-${player.id}`}
+  >
+    <div className="flex items-center justify-between gap-2">
+      <span>{player.name}</span>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onTogglePlayerRole(player.id, 'isOffense')}
+          className={`rounded-md px-2 py-1 text-xs ${player.isOffense ? 'bg-emerald-100' : 'bg-gray-100'}`}
+          data-testid={`player-offense-${player.id}`}
+        >
+          ⚽
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onTogglePlayerRole(player.id, 'isDefense')}
+          className={`rounded-md px-2 py-1 text-xs ${player.isDefense ? 'bg-sky-100' : 'bg-gray-100'}`}
+          data-testid={`player-defense-${player.id}`}
+        >
+          🛡
+        </button>
+      </div>
+    </div>
+  </div>
+)
+
+const TeamColumn = ({
+  title,
+  team,
+  players,
+  disabled,
+  onChangeTeamColor,
+  onChangeTeamName,
+  onDropPlayer,
+  onTogglePlayerRole,
+  allowColorEdit,
+  allowNameEdit,
+  isBench = false,
+}) => (
+  <div
+    onDragOver={(event) => event.preventDefault()}
+    onDrop={(event) => {
+      event.preventDefault()
+      const raw = event.dataTransfer.getData('text/plain')
+      if (!raw) return
+      const payload = JSON.parse(raw)
+      onDropPlayer(payload.playerId, team?.id ?? null)
+    }}
+    className={`rounded-xl border p-3 ${isBench ? 'bg-white' : colorClass[team.color] ?? 'bg-gray-50 border-gray-300'}`}
+    data-testid={team ? `team-card-${team.id}` : 'team-card-bench'}
+  >
+    <div className="mb-3 flex items-center justify-between gap-2">
+      {allowNameEdit && team ? (
+        <input
+          value={team.name ?? ''}
+          disabled={disabled}
+          onChange={(event) => onChangeTeamName(team.id, event.target.value)}
+          data-testid={`team-name-input-${team.id}`}
+          placeholder="שם קבוצה"
+          className="min-w-0 flex-1 rounded-lg border bg-white p-2 text-sm"
+        />
+      ) : (
+        <h3 className="font-semibold">{title}</h3>
+      )}
+      {allowColorEdit && team ? (
+        <select
+          value={team.color}
+          disabled={disabled}
+          onChange={(event) => onChangeTeamColor(team.id, event.target.value)}
+          data-testid={`team-color-select-${team.id}`}
+          className="rounded-lg border bg-white p-2 text-sm"
+        >
+          {APP_CONFIG.allowedTeamColors.map((color) => (
+            <option key={color} value={color}>
+              {colorLabel[color] ?? color}
+            </option>
+          ))}
+        </select>
+      ) : null}
+    </div>
+    <div className="space-y-2">
+      {players.map((player) => (
+        <PlayerChip
+          key={player.id}
+          player={player}
+          sourceTeamId={team?.id ?? null}
+          disabled={disabled}
+          onTogglePlayerRole={onTogglePlayerRole}
+        />
+      ))}
+      {players.length === 0 ? <p className="text-xs text-gray-500">גרור לכאן שחקנים</p> : null}
+    </div>
+  </div>
+)
+
 const TeamBuilder = ({
   teams,
   players,
   disabled,
-  onAssignPlayer,
+  onMovePlayer,
   onChangeTeamColor,
   onChangeTeamName,
+  onTogglePlayerRole,
   message,
   allowColorEdit = true,
   allowNameEdit = false,
 }) => {
+  const playersByTeamId = useMemo(() => {
+    const map = new Map()
+    teams.forEach((team) => {
+      map.set(
+        team.id,
+        team.players
+          .map((playerId) => players.find((player) => player.id === playerId))
+          .filter(Boolean),
+      )
+    })
+    return map
+  }, [players, teams])
+
+  const assignedPlayerIds = new Set(teams.flatMap((team) => team.players))
+  const benchPlayers = players.filter((player) => !assignedPlayerIds.has(player.id))
+
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm">
       <h2 className="mb-3 text-lg font-bold">בניית קבוצות</h2>
-      {message && (
+      {message ? (
         <p data-testid="team-builder-message" className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">
           {message}
         </p>
-      )}
-      <div className="grid gap-3 md:grid-cols-3">
+      ) : null}
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <TeamColumn
+          title="שחקנים פנויים"
+          players={benchPlayers}
+          disabled={disabled}
+          onDropPlayer={onMovePlayer}
+          onTogglePlayerRole={onTogglePlayerRole}
+          allowColorEdit={false}
+          allowNameEdit={false}
+          isBench
+        />
         {teams.map((team) => (
-          <div
+          <TeamColumn
             key={team.id}
-            data-testid={`team-card-${team.id}`}
-            className={`rounded-xl border p-3 ${colorClass[team.color] ?? 'bg-gray-50 border-gray-300'}`}
-          >
-            <div className="mb-2 flex items-center justify-between gap-2">
-              {allowNameEdit ? (
-                <input
-                  value={team.name ?? ''}
-                  disabled={disabled}
-                  onChange={(event) => onChangeTeamName(team.id, event.target.value)}
-                  data-testid={`team-name-input-${team.id}`}
-                  placeholder="שם קבוצה"
-                  className="min-w-0 flex-1 rounded-lg border bg-white p-2 text-sm"
-                />
-              ) : (
-                <h3 className="font-semibold">{getTeamDisplayName(team)}</h3>
-              )}
-              {allowColorEdit ? (
-                <select
-                  value={team.color}
-                  disabled={disabled}
-                  onChange={(event) => onChangeTeamColor(team.id, event.target.value)}
-                  data-testid={`team-color-select-${team.id}`}
-                  className="rounded-lg border bg-white p-2 text-sm"
-                >
-                  {APP_CONFIG.allowedTeamColors.map((color) => (
-                    <option key={color} value={color}>
-                      {colorLabel[color] ?? color}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-            </div>
-            <div className="space-y-2">
-              {players.map((player) => {
-                const isSelected = team.players.includes(player.id)
-                return (
-                  <label key={player.id} className="flex items-center justify-between text-sm">
-                    <span>{player.name}</span>
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      disabled={disabled}
-                      onChange={(event) => onAssignPlayer(team.id, player.id, event.target.checked)}
-                      data-testid={`team-player-${team.id}-${player.id}`}
-                      className="h-5 w-5"
-                    />
-                  </label>
-                )
-              })}
-            </div>
-          </div>
+            title={getTeamDisplayName(team)}
+            team={team}
+            players={playersByTeamId.get(team.id) ?? []}
+            disabled={disabled}
+            onChangeTeamColor={onChangeTeamColor}
+            onChangeTeamName={onChangeTeamName}
+            onDropPlayer={onMovePlayer}
+            onTogglePlayerRole={onTogglePlayerRole}
+            allowColorEdit={allowColorEdit}
+            allowNameEdit={allowNameEdit}
+          />
         ))}
       </div>
     </section>

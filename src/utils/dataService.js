@@ -99,6 +99,8 @@ const migratePlayer = (player) => ({
   ...player,
   name: normalizePlayerName(player.name),
   leagueId: normalizeLeagueId(player.leagueId),
+  isOffense: player.isOffense === true,
+  isDefense: player.isDefense === true,
 })
 
 const migrateTournament = (tournament, index) => ({

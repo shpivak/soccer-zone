@@ -15,6 +15,8 @@ create table if not exists soccer_zone_test.players (
   id text primary key,
   name text not null,
   league_id text not null,
+  is_offense boolean not null default false,
+  is_defense boolean not null default false,
   created_at timestamptz not null default timezone('utc', now())
 );
 
@@ -45,6 +47,8 @@ create table if not exists soccer_zone_prod.players (
   id text primary key,
   name text not null,
   league_id text not null,
+  is_offense boolean not null default false,
+  is_defense boolean not null default false,
   created_at timestamptz not null default timezone('utc', now())
 );
 

@@ -26,7 +26,7 @@ const PlayerStatsTable = ({ stats, leaders, summaryOnly = false }) => {
   const topScorers = [...stats].sort((a, b) => b.goals - a.goals).slice(0, 5)
   const topAssisters = [...stats].sort((a, b) => b.assists - a.assists).slice(0, 5)
   const bestDefenders = [...stats]
-    .filter((row) => row.gamesPlayed > 0)
+    .filter((row) => row.gamesPlayed > 0 && row.isDefense)
     .sort((a, b) => a.defenderRatio - b.defenderRatio)
     .slice(0, 5)
 

@@ -77,23 +77,14 @@ const LiveTournament = ({ adminMode }) => {
     setSelectedTournamentId(tournament.id)
   }
 
-  const handleAssignPlayer = (teamId, playerId, checked) => {
+  const handleMovePlayer = (playerId, teamId) => {
     if (!adminMode || !league) return
     const targetTeams = league.type === LEAGUE_TYPES.regular ? league.teams ?? [] : selectedTournament?.teams ?? []
     const targetTeam = targetTeams.find((team) => team.id === teamId)
     const playerCurrentTeam = targetTeams.find((team) => team.players.includes(playerId))
     const maxPlayersPerTeam = getMaxPlayersPerTeam(league)
 
-    if (checked && playerCurrentTeam && playerCurrentTeam.id !== teamId) {
-      setTeamBuilderMessage(
-        league.type === LEAGUE_TYPES.regular
-          ? 'שחקן לא יכול להיות משויך לשתי קבוצות קבועות באותה ליגה.'
-          : 'שחקן לא יכול להיות משויך לשתי קבוצות באותו טורניר.',
-      )
-      return
-    }
-
-    if (checked && targetTeam && targetTeam.players.length >= maxPlayersPerTeam) {
+    if (teamId && targetTeam && targetTeam.players.length >= maxPlayersPerTeam && playerCurrentTeam?.id !== teamId) {
       setTeamBuilderMessage(`אי אפשר להוסיף יותר מ-${maxPlayersPerTeam} שחקנים לקבוצה.`)
       return
     }
@@ -103,7 +94,7 @@ const LiveTournament = ({ adminMode }) => {
       teams.map((team) => {
         const removedPlayers = team.players.filter((id) => id !== playerId)
         if (team.id !== teamId) return { ...team, players: removedPlayers }
-        return { ...team, players: checked ? [...removedPlayers, playerId] : removedPlayers }
+        return { ...team, players: [...removedPlayers, playerId] }
       })
 
     if (league.type === LEAGUE_TYPES.regular) {
@@ -112,6 +103,13 @@ const LiveTournament = ({ adminMode }) => {
     }
 
     updateSelectedTournament((tournament) => ({ teams: applyUpdate(tournament.teams) }))
+  }
+
+  const handleTogglePlayerRole = (playerId, field) => {
+    if (!adminMode) return
+    setPlayers((current) =>
+      current.map((player) => (player.id === playerId ? { ...player, [field]: !player[field] } : player)),
+    )
   }
 
   const handleSaveGame = (game) => {
@@ -303,9 +301,10 @@ const LiveTournament = ({ adminMode }) => {
             teams={selectedTournament?.teams ?? []}
             players={leaguePlayers}
             disabled={!adminMode || !isRegularSetupEditable}
-            onAssignPlayer={handleAssignPlayer}
+            onMovePlayer={handleMovePlayer}
             onChangeTeamColor={() => {}}
             onChangeTeamName={handleChangeTeamName}
+            onTogglePlayerRole={handleTogglePlayerRole}
             message={teamBuilderMessage}
             allowColorEdit={false}
             allowNameEdit={isRegularSetupEditable}
@@ -316,8 +315,9 @@ const LiveTournament = ({ adminMode }) => {
           teams={selectedTournament?.teams ?? []}
           players={leaguePlayers}
           disabled={!adminMode}
-          onAssignPlayer={handleAssignPlayer}
+          onMovePlayer={handleMovePlayer}
           onChangeTeamColor={handleChangeTeamColor}
+          onTogglePlayerRole={handleTogglePlayerRole}
           message={teamBuilderMessage}
         />
       )}

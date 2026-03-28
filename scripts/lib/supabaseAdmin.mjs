@@ -5,6 +5,10 @@ const DEFAULT_SCHEMAS = {
 const LEAGUES_TABLE = 'leagues'
 const TOURNAMENTS_TABLE = 'tournaments'
 const MATCHES_TABLE = 'matches'
+const isMissingPlayerRoleColumnsError = (error) =>
+  error instanceof Error &&
+  ((error.message.includes('is_offense') && error.message.includes('column')) ||
+    (error.message.includes('is_defense') && error.message.includes('column')))
 
 const isMissingTableError = (error, tableName) =>
   error instanceof Error && error.message.includes(`Could not find the table`) && error.message.includes(tableName)
@@ -77,6 +81,8 @@ const toPlayerRow = (player) => ({
   id: player.id,
   name: player.name,
   league_id: player.leagueId,
+  is_offense: player.isOffense === true,
+  is_defense: player.isDefense === true,
 })
 
 const toTournamentRow = (tournament) => ({
@@ -179,11 +185,26 @@ export const seedDataset = async (datasetInput, leagues, players, tournaments, {
   }
 
   if (players.length > 0) {
-    await request(dataset, 'players', {
-      method: 'POST',
-      headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
-      body: JSON.stringify(players.map(toPlayerRow)),
-    })
+    try {
+      await request(dataset, 'players', {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
+        body: JSON.stringify(players.map(toPlayerRow)),
+      })
+    } catch (error) {
+      if (!isMissingPlayerRoleColumnsError(error)) throw error
+      await request(dataset, 'players', {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
+        body: JSON.stringify(
+          players.map((player) => ({
+            id: player.id,
+            name: player.name,
+            league_id: player.leagueId,
+          })),
+        ),
+      })
+    }
   }
 
   const tournamentRows = tournaments.map(toTournamentRow)
@@ -227,7 +248,12 @@ export const seedDataset = async (datasetInput, leagues, players, tournaments, {
 export const loadDataset = async (datasetInput) => {
   const dataset = getDataset(datasetInput)
 
-  const playersPromise = request(dataset, 'players?select=id,name,league_id&order=name.asc')
+  const playersPromise = request(dataset, 'players?select=id,name,league_id,is_offense,is_defense&order=name.asc').catch(
+    async (error) => {
+      if (!isMissingPlayerRoleColumnsError(error)) throw error
+      return request(dataset, 'players?select=id,name,league_id&order=name.asc')
+    },
+  )
   const leaguesPromise = request(
     dataset,
     'leagues?select=id,name,type,season_label,allow_roster_edits,teams&order=name.asc',
