@@ -2,6 +2,9 @@ import { getSchemaForDataset, SUPABASE_ANON_KEY, SUPABASE_TIMEOUT_MS, SUPABASE_U
 
 const PLAYERS_TABLE = 'players'
 const TOURNAMENTS_TABLE = 'tournaments'
+const MATCHES_TABLE = 'matches'
+const isMissingTableError = (error, tableName) =>
+  error instanceof Error && error.message.includes(`Could not find the table`) && error.message.includes(tableName)
 
 const toPlayerRow = (player) => ({
   id: player.id,
@@ -22,7 +25,6 @@ const toTournamentRow = (tournament) => ({
   league_id: tournament.leagueId,
   year: tournament.year,
   teams: tournament.teams,
-  games: tournament.games,
 })
 
 const fromTournamentRow = (row) => ({
@@ -34,6 +36,48 @@ const fromTournamentRow = (row) => ({
   teams: Array.isArray(row.teams) ? row.teams : [],
   games: Array.isArray(row.games) ? row.games : [],
 })
+
+const toMatchRows = (tournaments) =>
+  tournaments.flatMap((tournament) =>
+    (tournament.games ?? []).map((game) => ({
+      id: game.id,
+      tournament_id: tournament.id,
+      league_id: tournament.leagueId,
+      round: game.round ?? 1,
+      team_a: game.teamA,
+      team_b: game.teamB,
+      score: game.score,
+      events: game.events ?? [],
+    })),
+  )
+
+const fromMatchRow = (row) => ({
+  id: row.id,
+  round: row.round ?? 1,
+  teamA: row.team_a,
+  teamB: row.team_b,
+  score: row.score ?? { a: 0, b: 0 },
+  events: Array.isArray(row.events) ? row.events : [],
+})
+
+const withMatchesAttached = (tournaments, matchRows) => {
+  const matchesByTournamentId = new Map()
+
+  for (const row of matchRows ?? []) {
+    const tournamentId = row.tournament_id
+    if (!tournamentId) continue
+    const nextMatches = matchesByTournamentId.get(tournamentId) ?? []
+    nextMatches.push(fromMatchRow(row))
+    matchesByTournamentId.set(tournamentId, nextMatches)
+  }
+
+  return tournaments.map((tournament) => ({
+    ...tournament,
+    games: (matchesByTournamentId.get(tournament.id) ?? []).sort(
+      (a, b) => (a.round ?? 0) - (b.round ?? 0) || a.id.localeCompare(b.id),
+    ),
+  }))
+}
 
 const buildHeaders = (dataset, method) => {
   const schema = getSchemaForDataset(dataset)
@@ -78,17 +122,42 @@ const request = async (dataset, path, init = {}) => {
 }
 
 export const loadDatasetFromSupabase = async (dataset) => {
-  const [playerRows, tournamentRows] = await Promise.all([
-    request(dataset, `${PLAYERS_TABLE}?select=id,name,league_id&order=name.asc`),
-    request(
-      dataset,
-      `${TOURNAMENTS_TABLE}?select=id,date,league_number,league_id,year,teams,games&order=league_id.asc,date.asc`,
-    ),
-  ])
+  const playerPromise = request(dataset, `${PLAYERS_TABLE}?select=id,name,league_id&order=name.asc`)
 
-  return {
-    players: (playerRows ?? []).map(fromPlayerRow),
-    tournaments: (tournamentRows ?? []).map(fromTournamentRow),
+  try {
+    const [playerRows, tournamentRows, matchRows] = await Promise.all([
+      playerPromise,
+      request(
+        dataset,
+        `${TOURNAMENTS_TABLE}?select=id,date,league_number,league_id,year,teams&order=league_id.asc,date.asc`,
+      ),
+      request(
+        dataset,
+        `${MATCHES_TABLE}?select=id,tournament_id,league_id,round,team_a,team_b,score,events&order=tournament_id.asc,round.asc,id.asc`,
+      ),
+    ])
+
+    const tournaments = withMatchesAttached((tournamentRows ?? []).map(fromTournamentRow), matchRows ?? [])
+
+    return {
+      players: (playerRows ?? []).map(fromPlayerRow),
+      tournaments,
+    }
+  } catch (error) {
+    if (!isMissingTableError(error, MATCHES_TABLE)) throw error
+
+    const [playerRows, tournamentRows] = await Promise.all([
+      playerPromise,
+      request(
+        dataset,
+        `${TOURNAMENTS_TABLE}?select=id,date,league_number,league_id,year,teams,games&order=league_id.asc,date.asc`,
+      ),
+    ])
+
+    return {
+      players: (playerRows ?? []).map(fromPlayerRow),
+      tournaments: (tournamentRows ?? []).map(fromTournamentRow),
+    }
   }
 }
 
@@ -100,15 +169,66 @@ export const savePlayersToSupabase = async (dataset, players) => {
 }
 
 export const saveTournamentsToSupabase = async (dataset, tournaments) => {
-  await request(dataset, TOURNAMENTS_TABLE, {
-    method: 'POST',
-    body: JSON.stringify(tournaments.map(toTournamentRow)),
+  const tournamentRows = tournaments.map(toTournamentRow)
+  const matchRows = toMatchRows(tournaments)
+
+  try {
+    await request(dataset, `${MATCHES_TABLE}?id=not.is.null`, {
+      method: 'DELETE',
+      headers: { Prefer: 'return=minimal' },
+    })
+    await request(dataset, `${TOURNAMENTS_TABLE}?id=not.is.null`, {
+      method: 'DELETE',
+      headers: { Prefer: 'return=minimal' },
+    })
+
+    if (tournamentRows.length > 0) {
+      await request(dataset, TOURNAMENTS_TABLE, {
+        method: 'POST',
+        body: JSON.stringify(tournamentRows),
+      })
+    }
+
+    if (matchRows.length > 0) {
+      await request(dataset, MATCHES_TABLE, {
+        method: 'POST',
+        body: JSON.stringify(matchRows),
+      })
+    }
+    return
+  } catch (error) {
+    if (!isMissingTableError(error, MATCHES_TABLE)) throw error
+  }
+
+  await request(dataset, `${TOURNAMENTS_TABLE}?id=not.is.null`, {
+    method: 'DELETE',
+    headers: { Prefer: 'return=minimal' },
   })
+  if (tournaments.length > 0) {
+    await request(dataset, TOURNAMENTS_TABLE, {
+      method: 'POST',
+      body: JSON.stringify(
+        tournaments.map((tournament) => ({
+          ...toTournamentRow(tournament),
+          games: tournament.games ?? [],
+        })),
+      ),
+    })
+  }
 }
 
 export const resetSupabaseDataset = async (dataset) => {
-  await Promise.all([
-    request(dataset, `${TOURNAMENTS_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
-    request(dataset, `${PLAYERS_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
-  ])
+  try {
+    await Promise.all([
+      request(dataset, `${MATCHES_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
+      request(dataset, `${TOURNAMENTS_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
+      request(dataset, `${PLAYERS_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
+    ])
+  } catch (error) {
+    if (!isMissingTableError(error, MATCHES_TABLE)) throw error
+    await Promise.all([
+      request(dataset, `${TOURNAMENTS_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
+      request(dataset, `${PLAYERS_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
+    ])
+  }
 }
