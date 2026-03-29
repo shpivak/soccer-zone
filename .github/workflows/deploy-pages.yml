@@ -38,6 +38,8 @@ jobs:
         run: npm ci
 
       - name: Build site
+        env:
+          VITE_DEFAULT_DATASET: dev
         run: npm run build
 
       - name: Upload Pages artifact

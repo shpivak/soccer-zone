@@ -43,8 +43,8 @@ const fromPlayerRow = (row) => ({
   id: row.id,
   name: row.name,
   leagueId: row.league_id,
-  isOffense: row.is_offense === true,
-  isDefense: row.is_defense === true,
+  isOffense: row.is_offense ?? null,
+  isDefense: row.is_defense ?? null,
 })
 
 const toTournamentRow = (tournament) => ({
@@ -161,6 +161,13 @@ const request = async (dataset, path, init = {}) => {
 
     if (!response.ok) {
       const body = await response.text()
+      const schema = getSchemaForDataset(dataset)
+      if (response.status === 406 && body.includes('"code":"PGRST106"') && body.includes('Invalid schema')) {
+        throw new Error(
+          `Supabase request failed (${response.status}): Invalid schema "${schema}". ` +
+            `Expose it in Supabase API settings (PostgREST "exposed schemas"), then reload.`,
+        )
+      }
       throw new Error(`Supabase request failed (${response.status}): ${body || response.statusText}`)
     }
 

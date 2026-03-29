@@ -1,5 +1,9 @@
 import { defineConfig, devices } from '@playwright/test'
 
+if (process.env.VITE_DEFAULT_DATASET !== 'test') {
+  throw new Error('Playwright e2e requires VITE_DEFAULT_DATASET=test. Run: npm run test:e2e')
+}
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: false,
@@ -19,5 +23,9 @@ export default defineConfig({
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: true,
     timeout: 120000,
+    env: {
+      ...process.env,
+      VITE_DEFAULT_DATASET: 'test',
+    },
   },
 })

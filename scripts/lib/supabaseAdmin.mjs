@@ -1,4 +1,5 @@
 const DEFAULT_SCHEMAS = {
+  dev: process.env.SUPABASE_DEV_SCHEMA || 'soccer_zone_dev',
   test: process.env.SUPABASE_TEST_SCHEMA || 'soccer_zone_test',
   prod: process.env.SUPABASE_PROD_SCHEMA || 'soccer_zone_prod',
 }
@@ -21,17 +22,22 @@ const requireEnv = (name) => {
   return value
 }
 
-const getDataset = (input = process.env.SUPABASE_TARGET_DATASET || 'test') => {
-  if (input !== 'test' && input !== 'prod') {
-    throw new Error(`Unsupported dataset "${input}". Use "test" or "prod".`)
+const getDataset = (input = process.env.SUPABASE_TARGET_DATASET || 'dev') => {
+  if (input !== 'dev' && input !== 'test' && input !== 'prod') {
+    throw new Error(`Unsupported dataset "${input}". Use "dev", "test", or "prod".`)
   }
   return input
 }
 
 const assertDatasetAllowed = (dataset, actionLabel) => {
-  if (dataset !== 'prod') return
-  if (process.env.ALLOW_PROD_DB_RESET === 'true') return
-  throw new Error(`${actionLabel} against prod is blocked. Set ALLOW_PROD_DB_RESET=true to override.`)
+  if (dataset === 'prod') {
+    if (process.env.ALLOW_PROD_DB_RESET === 'true') return
+    throw new Error(`${actionLabel} against prod is blocked. Set ALLOW_PROD_DB_RESET=true to override.`)
+  }
+  if (dataset === 'dev') {
+    if (process.env.ALLOW_DEV_DB_RESET === 'true') return
+    throw new Error(`${actionLabel} against dev is blocked. Set ALLOW_DEV_DB_RESET=true to override.`)
+  }
 }
 
 const getHeaders = (dataset, method) => {
@@ -108,6 +114,15 @@ const toMatchRows = (tournaments) =>
     })),
   )
 
+const dedupeById = (items) => {
+  const map = new Map()
+  for (const item of items ?? []) {
+    if (!item?.id) continue
+    map.set(item.id, item)
+  }
+  return [...map.values()]
+}
+
 const fromMatchRow = (row) => ({
   id: row.id,
   round: row.round ?? 1,
@@ -143,18 +158,15 @@ export const resetDataset = async (datasetInput, { allowProd = false } = {}) => 
   }
 
   try {
-    await Promise.all([
-      request(dataset, `${MATCHES_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
-      request(dataset, `${TOURNAMENTS_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
-      request(dataset, 'players?id=not.is.null', { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
-      request(dataset, `${LEAGUES_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
-    ])
+    // Avoid occasional Postgres deadlocks by deleting in a consistent order.
+    await request(dataset, `${MATCHES_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+    await request(dataset, `${TOURNAMENTS_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+    await request(dataset, 'players?id=not.is.null', { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+    await request(dataset, `${LEAGUES_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
   } catch (error) {
     if (!isMissingTableError(error, MATCHES_TABLE) && !isMissingTableError(error, LEAGUES_TABLE)) throw error
-    await Promise.all([
-      request(dataset, `${TOURNAMENTS_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
-      request(dataset, 'players?id=not.is.null', { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
-    ])
+    await request(dataset, `${TOURNAMENTS_TABLE}?id=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+    await request(dataset, 'players?id=not.is.null', { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
     try {
       await request(dataset, `${LEAGUES_TABLE}?id=not.is.null`, {
         method: 'DELETE',
@@ -172,24 +184,28 @@ export const seedDataset = async (datasetInput, leagues, players, tournaments, {
     assertDatasetAllowed(dataset, 'Seed')
   }
 
-  if (leagues.length > 0) {
+  const uniqueLeagues = dedupeById(leagues)
+  const uniquePlayers = dedupeById(players)
+  const uniqueTournaments = dedupeById(tournaments)
+
+  if (uniqueLeagues.length > 0) {
     try {
       await request(dataset, LEAGUES_TABLE, {
         method: 'POST',
         headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
-        body: JSON.stringify(leagues.map(toLeagueRow)),
+        body: JSON.stringify(uniqueLeagues.map(toLeagueRow)),
       })
     } catch (error) {
       if (!isMissingTableError(error, LEAGUES_TABLE)) throw error
     }
   }
 
-  if (players.length > 0) {
+  if (uniquePlayers.length > 0) {
     try {
       await request(dataset, 'players', {
         method: 'POST',
         headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
-        body: JSON.stringify(players.map(toPlayerRow)),
+        body: JSON.stringify(uniquePlayers.map(toPlayerRow)),
       })
     } catch (error) {
       if (!isMissingPlayerRoleColumnsError(error)) throw error
@@ -197,7 +213,7 @@ export const seedDataset = async (datasetInput, leagues, players, tournaments, {
         method: 'POST',
         headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
         body: JSON.stringify(
-          players.map((player) => ({
+          uniquePlayers.map((player) => ({
             id: player.id,
             name: player.name,
             league_id: player.leagueId,
@@ -207,8 +223,8 @@ export const seedDataset = async (datasetInput, leagues, players, tournaments, {
     }
   }
 
-  const tournamentRows = tournaments.map(toTournamentRow)
-  const matchRows = toMatchRows(tournaments)
+  const tournamentRows = uniqueTournaments.map(toTournamentRow)
+  const matchRows = dedupeById(toMatchRows(uniqueTournaments))
 
   try {
     if (tournamentRows.length > 0) {
@@ -231,12 +247,12 @@ export const seedDataset = async (datasetInput, leagues, players, tournaments, {
     if (!isMissingTableError(error, MATCHES_TABLE)) throw error
   }
 
-  if (tournaments.length > 0) {
+  if (uniqueTournaments.length > 0) {
     await request(dataset, TOURNAMENTS_TABLE, {
       method: 'POST',
       headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
       body: JSON.stringify(
-        tournaments.map((tournament) => ({
+        uniqueTournaments.map((tournament) => ({
           ...toTournamentRow(tournament),
           games: tournament.games ?? [],
         })),

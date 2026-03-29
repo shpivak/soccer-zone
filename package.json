@@ -8,7 +8,9 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:e2e": "playwright test",
+    "test:e2e": "VITE_DEFAULT_DATASET=test playwright test",
+    "db:seed:dev": "SUPABASE_TARGET_DATASET=dev node scripts/migrate-mock-data-to-supabase.mjs",
+    "db:reset:dev": "ALLOW_DEV_DB_RESET=true SUPABASE_TARGET_DATASET=dev SEED_AFTER_RESET=false node scripts/reset-supabase-dataset.mjs",
     "db:seed:test": "SUPABASE_TARGET_DATASET=test node scripts/migrate-mock-data-to-supabase.mjs",
     "db:reset:test": "SUPABASE_TARGET_DATASET=test node scripts/reset-supabase-dataset.mjs"
   },

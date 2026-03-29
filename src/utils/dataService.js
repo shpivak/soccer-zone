@@ -8,15 +8,8 @@ import {
   saveTournamentsToSupabase,
 } from './supabaseRest'
 import { LEAGUE_TYPES } from './leagueUtils'
-import {
-  AVAILABLE_DATASETS,
-  canResetDataset,
-  DEFAULT_DATASET,
-  isSupabaseConfigured,
-  resolveDataset,
-} from './storageConfig'
+import { canResetDataset, DEFAULT_DATASET, isSupabaseConfigured, resolveDataset } from './storageConfig'
 
-const ACTIVE_DATASET_KEY = 'soccer-zone-active-dataset'
 const ACTIVE_LEAGUE_KEY = 'soccer-zone-active-league'
 const LEGACY_PLAYERS_KEY = 'soccer-zone-players'
 const LEGACY_TOURNAMENTS_KEY = 'soccer-zone-tournaments'
@@ -83,18 +76,14 @@ const normalizedTeamNames = {
 const normalizePlayerName = (name) => placeholderPlayerNames[name] ?? name
 const normalizeTeamName = (name) => normalizedTeamNames[name] ?? name
 const normalizePlayerRoles = (player) => {
-  if (player.isOffense === true || player.isDefense === true) {
+  if (typeof player.isOffense === 'boolean' || typeof player.isDefense === 'boolean') {
     return {
       isOffense: player.isOffense === true,
       isDefense: player.isDefense === true,
     }
   }
 
-  const numericId = Number(String(player.id).replace(/\D/g, '')) || 0
-  return {
-    isOffense: numericId % 2 === 0,
-    isDefense: numericId % 2 === 1,
-  }
+  return { isOffense: false, isDefense: false }
 }
 
 const migrateLeague = (league) => ({
@@ -141,7 +130,7 @@ const migrateTournament = (tournament, index) => ({
 })
 
 const defaultDataByDataset = (dataset) => {
-  if (dataset === 'prod') return { leagues: [], players: [], tournaments: [] }
+  if (dataset === 'prod' || dataset === 'dev') return { leagues: [], players: [], tournaments: [] }
   return {
     leagues: defaultLeagues.map(clone),
     players: defaultPlayers.map(clone),
@@ -149,14 +138,7 @@ const defaultDataByDataset = (dataset) => {
   }
 }
 
-export const getActiveDataset = () => {
-  const dataset = localStorage.getItem(ACTIVE_DATASET_KEY)
-  return AVAILABLE_DATASETS.includes(dataset) ? dataset : DEFAULT_DATASET
-}
-
-export const setActiveDataset = (dataset) => {
-  localStorage.setItem(ACTIVE_DATASET_KEY, resolveDataset(dataset))
-}
+export const getActiveDataset = () => DEFAULT_DATASET
 
 export const getActiveLeague = () => {
   const leagueId = normalizeLeagueId(localStorage.getItem(ACTIVE_LEAGUE_KEY))
