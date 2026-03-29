@@ -13,6 +13,7 @@ export const APP_CONFIG = {
     maxPlayersPerTeam: 9,
   },
   friendly: {
+    maxTeams: 8,
     teamsCount: 3,
     maxPlayersPerTeam: 7,
   },

@@ -31,6 +31,7 @@ const LiveTournament = ({ adminMode }) => {
   const [teamBuilderMessage, setTeamBuilderMessage] = useState('')
   const [gameInputMessage, setGameInputMessage] = useState('')
   const labels = getLeagueModeLabels(league?.type)
+  const maxPlayersPerTeam = league ? getMaxPlayersPerTeam(league) : undefined
   const isRegularSetupEditable =
     league?.type === LEAGUE_TYPES.regular &&
     (selectedTournament?.leagueNumber === 1 || league?.allowRosterEdits === true)
@@ -67,7 +68,7 @@ const LiveTournament = ({ adminMode }) => {
 
   const handleCreateTournament = () => {
     if (!adminMode || !league) return
-    if (league.type === LEAGUE_TYPES.regular && (league.teams?.length ?? 0) < 2) {
+    if (league.type === LEAGUE_TYPES.regular && leagueTournaments.length > 0 && (league.teams?.length ?? 0) < 2) {
       setTeamBuilderMessage('בליגה סדירה צריך להגדיר לפחות שתי קבוצות לפני יצירת מחזור.')
       return
     }
@@ -105,17 +106,29 @@ const LiveTournament = ({ adminMode }) => {
     updateSelectedTournament((tournament) => ({ teams: applyUpdate(tournament.teams) }))
   }
 
+  const handleDeletePlayer = (playerId) => {
+    if (!adminMode) return
+    setPlayers((current) => current.filter((player) => player.id !== playerId))
+    if (league.type === LEAGUE_TYPES.regular) {
+      syncRegularLeagueTeams((teams) =>
+        teams.map((team) => ({ ...team, players: team.players.filter((id) => id !== playerId) }))
+      )
+    } else if (selectedTournament) {
+      updateSelectedTournament((tournament) => ({
+        teams: tournament.teams.map((team) => ({
+          ...team,
+          players: team.players.filter((id) => id !== playerId),
+        })),
+      }))
+    }
+  }
+
   const handleTogglePlayerRole = (playerId, field) => {
     if (!adminMode) return
     setPlayers((current) =>
       current.map((player) => {
         if (player.id !== playerId) return player
-        const nextValue = !player[field]
-        const siblingField = field === 'isOffense' ? 'isDefense' : 'isOffense'
-        if (!nextValue && player[siblingField] !== true) {
-          return player
-        }
-        return { ...player, [field]: nextValue }
+        return { ...player, [field]: !player[field] }
       }),
     )
   }
@@ -185,15 +198,35 @@ const LiveTournament = ({ adminMode }) => {
     ])
   }
 
+  const handleAddFriendlyTeam = () => {
+    if (!adminMode || !league || league.type !== LEAGUE_TYPES.friendly || !selectedTournament) return
+    if ((selectedTournament.teams?.length ?? 0) >= APP_CONFIG.friendly.maxTeams) {
+      setTeamBuilderMessage(`אפשר להגדיר עד ${APP_CONFIG.friendly.maxTeams} קבוצות במשחקי ידידות.`)
+      return
+    }
+
+    setTeamBuilderMessage('')
+    updateSelectedTournament((tournament) => ({
+      teams: [
+        ...tournament.teams,
+        {
+          id: `friendly-team-${Date.now()}`,
+          name: '',
+          color: APP_CONFIG.allowedTeamColors[tournament.teams.length % APP_CONFIG.allowedTeamColors.length] ?? 'gray',
+          players: [],
+        },
+      ],
+    }))
+  }
+
   const handleAddPlayer = () => {
     if (!adminMode || !newPlayerName.trim()) return
-    const roleIndex = leaguePlayers.length
     const nextPlayer = {
       id: `p${Date.now()}`,
       name: newPlayerName.trim(),
       leagueId: activeLeagueId,
-      isOffense: roleIndex % 2 === 0 || roleIndex % 7 === 0,
-      isDefense: roleIndex % 2 === 1 || roleIndex % 7 === 0,
+      isOffense: false,
+      isDefense: false,
     }
     setPlayers((current) => [...current, nextPlayer])
     setNewPlayerName('')
@@ -315,24 +348,53 @@ const LiveTournament = ({ adminMode }) => {
           <TeamBuilder
             teams={selectedTournament?.teams ?? []}
             players={leaguePlayers}
+            maxPlayersPerTeam={maxPlayersPerTeam}
             disabled={!adminMode || !isRegularSetupEditable}
             onMovePlayer={handleMovePlayer}
             onChangeTeamColor={() => {}}
             onChangeTeamName={handleChangeTeamName}
             onTogglePlayerRole={handleTogglePlayerRole}
+            onDeletePlayer={handleDeletePlayer}
             message={teamBuilderMessage}
             allowColorEdit={false}
             allowNameEdit={isRegularSetupEditable}
+          />
+        </section>
+      ) : league.type === LEAGUE_TYPES.friendly ? (
+        <section className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-lg font-bold">בניית קבוצות ידידות</h2>
+            <button
+              onClick={handleAddFriendlyTeam}
+              disabled={!adminMode}
+              data-testid="add-friendly-team"
+              className="rounded-xl border px-3 py-2 text-sm disabled:opacity-40"
+            >
+              הוסף קבוצה
+            </button>
+          </div>
+          <TeamBuilder
+            teams={selectedTournament?.teams ?? []}
+            players={leaguePlayers}
+            maxPlayersPerTeam={maxPlayersPerTeam}
+            disabled={!adminMode}
+            onMovePlayer={handleMovePlayer}
+            onChangeTeamColor={handleChangeTeamColor}
+            onTogglePlayerRole={handleTogglePlayerRole}
+            onDeletePlayer={handleDeletePlayer}
+            message={teamBuilderMessage}
           />
         </section>
       ) : (
         <TeamBuilder
           teams={selectedTournament?.teams ?? []}
           players={leaguePlayers}
+          maxPlayersPerTeam={maxPlayersPerTeam}
           disabled={!adminMode}
           onMovePlayer={handleMovePlayer}
           onChangeTeamColor={handleChangeTeamColor}
           onTogglePlayerRole={handleTogglePlayerRole}
+          onDeletePlayer={handleDeletePlayer}
           message={teamBuilderMessage}
         />
       )}

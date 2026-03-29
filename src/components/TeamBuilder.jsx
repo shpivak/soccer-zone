@@ -22,7 +22,7 @@ const colorClass = {
   white: 'bg-white border-gray-300',
 }
 
-const PlayerChip = ({ player, sourceTeamId, disabled, onTogglePlayerRole }) => (
+const PlayerChip = ({ player, sourceTeamId, disabled, onTogglePlayerRole, onDeletePlayer, isBench }) => (
   <div
     draggable={!disabled}
     onDragStart={(event) => {
@@ -33,8 +33,21 @@ const PlayerChip = ({ player, sourceTeamId, disabled, onTogglePlayerRole }) => (
     data-testid={`player-chip-${player.id}`}
   >
     <div className="flex items-center justify-between gap-2">
-      <span>{player.name}</span>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 min-w-0">
+        {isBench && onDeletePlayer ? (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onDeletePlayer(player.id)}
+            className="rounded-md px-2 py-1 text-xs bg-red-100 text-red-700 shrink-0"
+            data-testid={`player-delete-${player.id}`}
+          >
+            ✕
+          </button>
+        ) : null}
+        <span className="truncate">{player.name}</span>
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
         <button
           type="button"
           disabled={disabled}
@@ -62,11 +75,13 @@ const TeamColumn = ({
   title,
   team,
   players,
+  maxPlayersPerTeam,
   disabled,
   onChangeTeamColor,
   onChangeTeamName,
   onDropPlayer,
   onTogglePlayerRole,
+  onDeletePlayer,
   allowColorEdit,
   allowNameEdit,
   isBench = false,
@@ -96,6 +111,14 @@ const TeamColumn = ({
       ) : (
         <h3 className="font-semibold">{title}</h3>
       )}
+      {!isBench && team && maxPlayersPerTeam ? (
+        <span
+          data-testid={`team-player-count-${team.id}`}
+          className={`text-xs font-medium px-2 py-0.5 rounded-full ${players.length >= maxPlayersPerTeam ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}
+        >
+          {players.length}/{maxPlayersPerTeam}
+        </span>
+      ) : null}
       {allowColorEdit && team ? (
         <select
           value={team.color}
@@ -120,6 +143,8 @@ const TeamColumn = ({
           sourceTeamId={team?.id ?? null}
           disabled={disabled}
           onTogglePlayerRole={onTogglePlayerRole}
+          onDeletePlayer={onDeletePlayer}
+          isBench={isBench}
         />
       ))}
       {players.length === 0 ? <p className="text-xs text-gray-500">גרור לכאן שחקנים</p> : null}
@@ -130,11 +155,13 @@ const TeamColumn = ({
 const TeamBuilder = ({
   teams,
   players,
+  maxPlayersPerTeam,
   disabled,
   onMovePlayer,
   onChangeTeamColor,
   onChangeTeamName,
   onTogglePlayerRole,
+  onDeletePlayer,
   message,
   allowColorEdit = true,
   allowNameEdit = false,
@@ -170,6 +197,7 @@ const TeamBuilder = ({
           disabled={disabled}
           onDropPlayer={onMovePlayer}
           onTogglePlayerRole={onTogglePlayerRole}
+          onDeletePlayer={onDeletePlayer}
           allowColorEdit={false}
           allowNameEdit={false}
           isBench
@@ -180,6 +208,7 @@ const TeamBuilder = ({
             title={getTeamDisplayName(team)}
             team={team}
             players={playersByTeamId.get(team.id) ?? []}
+            maxPlayersPerTeam={maxPlayersPerTeam}
             disabled={disabled}
             onChangeTeamColor={onChangeTeamColor}
             onChangeTeamName={onChangeTeamName}

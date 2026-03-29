@@ -43,8 +43,8 @@ const fromPlayerRow = (row) => ({
   id: row.id,
   name: row.name,
   leagueId: row.league_id,
-  isOffense: row.is_offense === true,
-  isDefense: row.is_defense === true,
+  isOffense: row.is_offense ?? null,
+  isDefense: row.is_defense ?? null,
 })
 
 const toTournamentRow = (tournament) => ({
@@ -108,6 +108,27 @@ const withMatchesAttached = (tournaments, matchRows) => {
   }))
 }
 
+const isWriteMethod = (method) => method !== 'GET' && method !== 'HEAD'
+
+const buildIdInFilter = (ids) => `id=in.(${ids.map((id) => encodeURIComponent(id)).join(',')})`
+
+const listTableIds = async (dataset, tableName) => {
+  const rows = await request(dataset, `${tableName}?select=id`)
+  return new Set((rows ?? []).map((row) => row.id))
+}
+
+const deleteRemovedRows = async (dataset, tableName, nextIds) => {
+  const existingIds = await listTableIds(dataset, tableName)
+  const idsToDelete = [...existingIds].filter((id) => !nextIds.has(id))
+
+  if (idsToDelete.length === 0) return
+
+  await request(dataset, `${tableName}?${buildIdInFilter(idsToDelete)}`, {
+    method: 'DELETE',
+    headers: { Prefer: 'return=minimal' },
+  })
+}
+
 const buildHeaders = (dataset, method) => {
   const schema = getSchemaForDataset(dataset)
   const profileHeader = method === 'GET' || method === 'HEAD' ? 'Accept-Profile' : 'Content-Profile'
@@ -130,6 +151,7 @@ const request = async (dataset, path, init = {}) => {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
       ...init,
       method,
+      keepalive: init.keepalive ?? isWriteMethod(method),
       headers: {
         ...buildHeaders(dataset, method),
         ...(init.headers ?? {}),
@@ -139,6 +161,13 @@ const request = async (dataset, path, init = {}) => {
 
     if (!response.ok) {
       const body = await response.text()
+      const schema = getSchemaForDataset(dataset)
+      if (response.status === 406 && body.includes('"code":"PGRST106"') && body.includes('Invalid schema')) {
+        throw new Error(
+          `Supabase request failed (${response.status}): Invalid schema "${schema}". ` +
+            `Expose it in Supabase API settings (PostgREST "exposed schemas"), then reload.`,
+        )
+      }
       throw new Error(`Supabase request failed (${response.status}): ${body || response.statusText}`)
     }
 
@@ -208,46 +237,46 @@ export const loadDatasetFromSupabase = async (dataset) => {
 
 export const saveLeaguesToSupabase = async (dataset, leagues) => {
   try {
-    await request(dataset, `${LEAGUES_TABLE}?id=not.is.null`, {
-      method: 'DELETE',
-      headers: { Prefer: 'return=minimal' },
-    })
     if (leagues.length > 0) {
       await request(dataset, LEAGUES_TABLE, {
         method: 'POST',
+        headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
         body: JSON.stringify(leagues.map(toLeagueRow)),
       })
     }
+    await deleteRemovedRows(dataset, LEAGUES_TABLE, new Set(leagues.map((league) => league.id)))
   } catch (error) {
     if (!isMissingTableError(error, LEAGUES_TABLE)) throw error
   }
 }
 
 export const savePlayersToSupabase = async (dataset, players) => {
-  await request(dataset, `${PLAYERS_TABLE}?id=not.is.null`, {
-    method: 'DELETE',
-    headers: { Prefer: 'return=minimal' },
-  })
-  if (players.length === 0) return
-
   try {
-    await request(dataset, PLAYERS_TABLE, {
-      method: 'POST',
-      body: JSON.stringify(players.map(toPlayerRow)),
-    })
+    if (players.length > 0) {
+      await request(dataset, PLAYERS_TABLE, {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
+        body: JSON.stringify(players.map(toPlayerRow)),
+      })
+    }
   } catch (error) {
     if (!isMissingPlayerRoleColumnsError(error)) throw error
-    await request(dataset, PLAYERS_TABLE, {
-      method: 'POST',
-      body: JSON.stringify(
-        players.map((player) => ({
-          id: player.id,
-          name: player.name,
-          league_id: player.leagueId,
-        })),
-      ),
-    })
+    if (players.length > 0) {
+      await request(dataset, PLAYERS_TABLE, {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
+        body: JSON.stringify(
+          players.map((player) => ({
+            id: player.id,
+            name: player.name,
+            league_id: player.leagueId,
+          })),
+        ),
+      })
+    }
   }
+
+  await deleteRemovedRows(dataset, PLAYERS_TABLE, new Set(players.map((player) => player.id)))
 }
 
 export const saveTournamentsToSupabase = async (dataset, tournaments) => {
@@ -255,18 +284,10 @@ export const saveTournamentsToSupabase = async (dataset, tournaments) => {
   const matchRows = toMatchRows(tournaments)
 
   try {
-    await request(dataset, `${MATCHES_TABLE}?id=not.is.null`, {
-      method: 'DELETE',
-      headers: { Prefer: 'return=minimal' },
-    })
-    await request(dataset, `${TOURNAMENTS_TABLE}?id=not.is.null`, {
-      method: 'DELETE',
-      headers: { Prefer: 'return=minimal' },
-    })
-
     if (tournamentRows.length > 0) {
       await request(dataset, TOURNAMENTS_TABLE, {
         method: 'POST',
+        headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
         body: JSON.stringify(tournamentRows),
       })
     }
@@ -274,21 +295,24 @@ export const saveTournamentsToSupabase = async (dataset, tournaments) => {
     if (matchRows.length > 0) {
       await request(dataset, MATCHES_TABLE, {
         method: 'POST',
+        headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
         body: JSON.stringify(matchRows),
       })
     }
+
+    await Promise.all([
+      deleteRemovedRows(dataset, TOURNAMENTS_TABLE, new Set(tournaments.map((tournament) => tournament.id))),
+      deleteRemovedRows(dataset, MATCHES_TABLE, new Set(matchRows.map((match) => match.id))),
+    ])
     return
   } catch (error) {
     if (!isMissingTableError(error, MATCHES_TABLE)) throw error
   }
 
-  await request(dataset, `${TOURNAMENTS_TABLE}?id=not.is.null`, {
-    method: 'DELETE',
-    headers: { Prefer: 'return=minimal' },
-  })
   if (tournaments.length > 0) {
     await request(dataset, TOURNAMENTS_TABLE, {
       method: 'POST',
+      headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
       body: JSON.stringify(
         tournaments.map((tournament) => ({
           ...toTournamentRow(tournament),
@@ -297,6 +321,7 @@ export const saveTournamentsToSupabase = async (dataset, tournaments) => {
       ),
     })
   }
+  await deleteRemovedRows(dataset, TOURNAMENTS_TABLE, new Set(tournaments.map((tournament) => tournament.id)))
 }
 
 export const resetSupabaseDataset = async (dataset) => {

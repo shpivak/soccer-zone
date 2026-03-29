@@ -1,3 +1,4 @@
+import './lib/loadEnv.mjs'
 import { defaultLeagues, defaultPlayers, defaultTournaments } from './lib/mockData.mjs'
 import { resetDataset, seedDataset } from './lib/supabaseAdmin.mjs'
 

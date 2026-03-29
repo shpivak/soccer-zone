@@ -94,12 +94,15 @@ That means each league has its own players, tournaments, standings, and stats.
 
 ## Supabase Layout
 
-The project expects two PostgreSQL schemas:
+The project expects three PostgreSQL schemas:
 
+- `soccer_zone_dev`
 - `soccer_zone_test`
 - `soccer_zone_prod`
 
-Everything should be seeded into `soccer_zone_test` first. `soccer_zone_prod` should remain empty until you are ready.
+`soccer_zone_dev` is the default dataset for local development and (eventually) sample users.
+
+`soccer_zone_test` is reserved for automated test suites (e2e). `soccer_zone_prod` should remain empty until you are ready.
 
 Tables per schema:
 
@@ -108,11 +111,15 @@ Tables per schema:
 
 `teams` and `games` are stored as `jsonb` columns inside `tournaments`, which keeps the current frontend model intact and makes the REST migration much smaller.
 
-Bootstrap SQL lives in [`supabase/bootstrap.sql`](/Users/hadarshpivak/projects/h_github/soccer-zone/supabase/bootstrap.sql).
+Bootstrap SQL lives under `supabase/`:
+
+- `supabase/bootstrap.dev.sql`
+- `supabase/bootstrap.test.sql`
+- `supabase/bootstrap.prod.sql`
 
 Important Supabase setup notes:
 
-- Add both schemas to Supabase API exposed schemas
+- Add `soccer_zone_dev`, `soccer_zone_test`, and `soccer_zone_prod` to Supabase API exposed schemas
 - Use the project URL for REST: `https://gubuvqsutilhsmgxsghq.supabase.co`
 - Use the anon/publishable key in the browser
 - Use the service-role key only for scripts and test reset/seed flows
@@ -126,9 +133,10 @@ Browser config:
 - `VITE_STORAGE_PROVIDER=supabase`
 - `VITE_SUPABASE_URL=...`
 - `VITE_SUPABASE_ANON_KEY=...`
+- `VITE_SUPABASE_DEV_SCHEMA=soccer_zone_dev`
 - `VITE_SUPABASE_TEST_SCHEMA=soccer_zone_test`
 - `VITE_SUPABASE_PROD_SCHEMA=soccer_zone_prod`
-- `VITE_DEFAULT_DATASET=test`
+- `VITE_DEFAULT_DATASET=dev` (fixed at **build time**; there is no dev/test switcher in the UI — GitHub Pages builds use `dev`; Playwright/CI builds use `test` via `npm run test:e2e`)
 - `VITE_ENABLE_PROD_DATASET=false`
 - `VITE_ENABLE_TEST_RESET=true`
 - `VITE_ENABLE_PROD_RESET=false`
@@ -137,6 +145,7 @@ Script and test config:
 
 - `SUPABASE_URL=...`
 - `SUPABASE_SERVICE_ROLE_KEY=...`
+- `SUPABASE_DEV_SCHEMA=soccer_zone_dev`
 - `SUPABASE_TEST_SCHEMA=soccer_zone_test`
 - `SUPABASE_PROD_SCHEMA=soccer_zone_prod`
 - `ALLOW_PROD_DB_RESET=false`
@@ -163,18 +172,25 @@ Reset the test schema and immediately re-seed it:
 npm run db:reset:test
 ```
 
+Clear the dev schema (no seeding):
+
+```bash
+npm run db:reset:dev
+```
+
 ## Dataset Behavior
 
-- `test` is the default dataset
-- `prod` is hidden unless `VITE_ENABLE_PROD_DATASET=true`
-- League clear/reset tools are enabled for `test` by default
-- Any `prod` reset path stays blocked unless `VITE_ENABLE_PROD_RESET=true` in the browser and `ALLOW_PROD_DB_RESET=true` in scripts
+Which Supabase schema the app uses is determined only by **`VITE_DEFAULT_DATASET`** at build time (`dev` | `test`, or `prod` when `VITE_ENABLE_PROD_DATASET=true`). There is no in-app dataset toggle.
 
-The admin panel in the UI is enabled by default and now works per selected league:
+- **Local / GitHub Pages:** use `VITE_DEFAULT_DATASET=dev` (see [`.github/workflows/deploy-pages.yml`](/Users/hadarshpivak/projects/h_github/soccer-zone/.github/workflows/deploy-pages.yml)).
+- **E2E / CI:** must run with `VITE_DEFAULT_DATASET=test` (the `npm run test:e2e` script sets this; [`.github/workflows/ci.yml`](/Users/hadarshpivak/projects/h_github/soccer-zone/.github/workflows/ci.yml) sets it too). Playwright fails fast if this is missing or wrong.
+- **Prod** remains opt-in via `VITE_ENABLE_PROD_DATASET` and `VITE_DEFAULT_DATASET=prod`.
+- League clear/reset tools follow the same flags as before (`ENABLE_*_RESET`).
+
+The admin panel in the UI is enabled by default and works per selected league:
 
 - `נקה ליגה` clears the selected league's players and tournaments after confirmation
-- `שחזר mock data` restores the selected league from `mock_data/` after confirmation
-- the dataset selector still stays on `test` unless you explicitly enable `prod` through env vars
+- `שחזר mock data` restores the selected league from `mock_data/` after confirmation (only when the build uses the `test` dataset)
 
 ## Development
 
@@ -202,7 +218,7 @@ Run lint:
 npm run lint
 ```
 
-Run end-to-end tests:
+Run end-to-end tests (requires `VITE_DEFAULT_DATASET=test`; the npm script sets it):
 
 ```bash
 npm run test:e2e

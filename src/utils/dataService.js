@@ -8,15 +8,8 @@ import {
   saveTournamentsToSupabase,
 } from './supabaseRest'
 import { LEAGUE_TYPES } from './leagueUtils'
-import {
-  AVAILABLE_DATASETS,
-  canResetDataset,
-  DEFAULT_DATASET,
-  isSupabaseConfigured,
-  resolveDataset,
-} from './storageConfig'
+import { canResetDataset, DEFAULT_DATASET, isSupabaseConfigured, resolveDataset } from './storageConfig'
 
-const ACTIVE_DATASET_KEY = 'soccer-zone-active-dataset'
 const ACTIVE_LEAGUE_KEY = 'soccer-zone-active-league'
 const LEGACY_PLAYERS_KEY = 'soccer-zone-players'
 const LEGACY_TOURNAMENTS_KEY = 'soccer-zone-tournaments'
@@ -41,6 +34,12 @@ const getStorageKeys = (dataset) => ({
   leaguesKey: `soccer-zone-${dataset}-leagues`,
   playersKey: `soccer-zone-${dataset}-players`,
   tournamentsKey: `soccer-zone-${dataset}-tournaments`,
+})
+
+const getPendingStorageKeys = (dataset) => ({
+  leaguesKey: `soccer-zone-${dataset}-pending-leagues`,
+  playersKey: `soccer-zone-${dataset}-pending-players`,
+  tournamentsKey: `soccer-zone-${dataset}-pending-tournaments`,
 })
 
 const DEFAULT_LEAGUE_ID = defaultLeagues[0].id
@@ -77,18 +76,14 @@ const normalizedTeamNames = {
 const normalizePlayerName = (name) => placeholderPlayerNames[name] ?? name
 const normalizeTeamName = (name) => normalizedTeamNames[name] ?? name
 const normalizePlayerRoles = (player) => {
-  if (player.isOffense === true || player.isDefense === true) {
+  if (typeof player.isOffense === 'boolean' || typeof player.isDefense === 'boolean') {
     return {
       isOffense: player.isOffense === true,
       isDefense: player.isDefense === true,
     }
   }
 
-  const numericId = Number(String(player.id).replace(/\D/g, '')) || 0
-  return {
-    isOffense: numericId % 2 === 0,
-    isDefense: numericId % 2 === 1,
-  }
+  return { isOffense: false, isDefense: false }
 }
 
 const migrateLeague = (league) => ({
@@ -135,7 +130,7 @@ const migrateTournament = (tournament, index) => ({
 })
 
 const defaultDataByDataset = (dataset) => {
-  if (dataset === 'prod') return { leagues: [], players: [], tournaments: [] }
+  if (dataset === 'prod' || dataset === 'dev') return { leagues: [], players: [], tournaments: [] }
   return {
     leagues: defaultLeagues.map(clone),
     players: defaultPlayers.map(clone),
@@ -143,14 +138,7 @@ const defaultDataByDataset = (dataset) => {
   }
 }
 
-export const getActiveDataset = () => {
-  const dataset = localStorage.getItem(ACTIVE_DATASET_KEY)
-  return AVAILABLE_DATASETS.includes(dataset) ? dataset : DEFAULT_DATASET
-}
-
-export const setActiveDataset = (dataset) => {
-  localStorage.setItem(ACTIVE_DATASET_KEY, resolveDataset(dataset))
-}
+export const getActiveDataset = () => DEFAULT_DATASET
 
 export const getActiveLeague = () => {
   const leagueId = normalizeLeagueId(localStorage.getItem(ACTIVE_LEAGUE_KEY))
@@ -201,11 +189,58 @@ const loadDatasetDataFromLocal = (dataset) => {
   })
 }
 
+const loadPendingDatasetData = (dataset) => {
+  const resolvedDataset = resolveDataset(dataset)
+  const { leaguesKey, playersKey, tournamentsKey } = getPendingStorageKeys(resolvedDataset)
+
+  return {
+    leagues: localStorage.getItem(leaguesKey),
+    players: localStorage.getItem(playersKey),
+    tournaments: localStorage.getItem(tournamentsKey),
+  }
+}
+
+const savePendingLeagues = (dataset, leagues) => {
+  const { leaguesKey } = getPendingStorageKeys(resolveDataset(dataset))
+  localStorage.setItem(leaguesKey, JSON.stringify(leagues))
+}
+
+const savePendingPlayers = (dataset, players) => {
+  const { playersKey } = getPendingStorageKeys(resolveDataset(dataset))
+  localStorage.setItem(playersKey, JSON.stringify(players))
+}
+
+const savePendingTournaments = (dataset, tournaments) => {
+  const { tournamentsKey } = getPendingStorageKeys(resolveDataset(dataset))
+  localStorage.setItem(tournamentsKey, JSON.stringify(tournaments))
+}
+
+const clearPendingLeagues = (dataset) => {
+  const { leaguesKey } = getPendingStorageKeys(resolveDataset(dataset))
+  localStorage.removeItem(leaguesKey)
+}
+
+const clearPendingPlayers = (dataset) => {
+  const { playersKey } = getPendingStorageKeys(resolveDataset(dataset))
+  localStorage.removeItem(playersKey)
+}
+
+const clearPendingTournaments = (dataset) => {
+  const { tournamentsKey } = getPendingStorageKeys(resolveDataset(dataset))
+  localStorage.removeItem(tournamentsKey)
+}
+
 export const loadDatasetData = async (dataset) => {
   const resolvedDataset = resolveDataset(dataset)
   if (isSupabaseConfigured()) {
     const data = await loadDatasetFromSupabase(resolvedDataset)
-    return normalizeLoadedData(resolvedDataset, data)
+    const pending = loadPendingDatasetData(resolvedDataset)
+
+    return normalizeLoadedData(resolvedDataset, {
+      leagues: pending.leagues ? safeParse(pending.leagues, data.leagues) : data.leagues,
+      players: pending.players ? safeParse(pending.players, data.players) : data.players,
+      tournaments: pending.tournaments ? safeParse(pending.tournaments, data.tournaments) : data.tournaments,
+    })
   }
 
   return loadDatasetDataFromLocal(resolvedDataset)
@@ -229,7 +264,9 @@ const saveTournamentsToLocal = (dataset, tournaments) => {
 export const saveLeagues = async (dataset, leagues) => {
   const resolvedDataset = resolveDataset(dataset)
   if (isSupabaseConfigured()) {
+    savePendingLeagues(resolvedDataset, leagues)
     await saveLeaguesToSupabase(resolvedDataset, leagues)
+    clearPendingLeagues(resolvedDataset)
     return
   }
 
@@ -239,7 +276,9 @@ export const saveLeagues = async (dataset, leagues) => {
 export const savePlayers = async (dataset, players) => {
   const resolvedDataset = resolveDataset(dataset)
   if (isSupabaseConfigured()) {
+    savePendingPlayers(resolvedDataset, players)
     await savePlayersToSupabase(resolvedDataset, players)
+    clearPendingPlayers(resolvedDataset)
     return
   }
 
@@ -249,7 +288,9 @@ export const savePlayers = async (dataset, players) => {
 export const saveTournaments = async (dataset, tournaments) => {
   const resolvedDataset = resolveDataset(dataset)
   if (isSupabaseConfigured()) {
+    savePendingTournaments(resolvedDataset, tournaments)
     await saveTournamentsToSupabase(resolvedDataset, tournaments)
+    clearPendingTournaments(resolvedDataset)
     return
   }
 
@@ -266,6 +307,9 @@ export const resetDatasetData = async (dataset) => {
 
   if (isSupabaseConfigured()) {
     await resetSupabaseDataset(resolvedDataset)
+    clearPendingLeagues(resolvedDataset)
+    clearPendingPlayers(resolvedDataset)
+    clearPendingTournaments(resolvedDataset)
     return
   }
 

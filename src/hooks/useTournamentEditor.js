@@ -4,8 +4,8 @@ import { LEAGUE_TYPES } from '../utils/leagueUtils'
 
 const splitToDefaultTeams = (playerIds) => [
   playerIds.slice(0, 6),
-  playerIds.slice(6, 13),
-  playerIds.slice(13, 20),
+  playerIds.slice(6, 12),
+  playerIds.slice(12, 18),
 ]
 
 const createSessionTeams = (league, players) => {

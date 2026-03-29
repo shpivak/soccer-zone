@@ -2,8 +2,7 @@ import { useMemo, useState } from 'react'
 import { useAppContext } from './hooks/useAppContext'
 import LiveTournament from './pages/LiveTournament'
 import Stats from './pages/Stats'
-import { getLeagueTypeLabel } from './utils/leagueUtils'
-import { AVAILABLE_DATASETS } from './utils/storageConfig'
+import { getLeagueTypeLabel, LEAGUE_TYPES } from './utils/leagueUtils'
 
 function App() {
   const {
@@ -15,26 +14,19 @@ function App() {
     clearActiveLeagueData,
     leagues,
     resetActiveLeagueToMockData,
-    setActiveDataset,
+    createLeague,
     setActiveLeagueId,
     setLeagues,
   } = useAppContext()
   const [page, setPage] = useState('live')
   const [adminMode, setAdminMode] = useState(true)
+  const [newLeagueName, setNewLeagueName] = useState('')
+  const [newLeagueType, setNewLeagueType] = useState(LEAGUE_TYPES.tournament)
 
   const activeLeague = useMemo(
     () => leagues.find((league) => league.id === activeLeagueId) ?? null,
     [activeLeagueId, leagues],
   )
-
-  const handleDatasetChange = (event) => {
-    const next = event.target.value
-    if (next === 'prod') {
-      const approved = window.confirm('מעבר ל-PROD הוא מצב ייצור. האם להמשיך?')
-      if (!approved) return
-    }
-    setActiveDataset(next)
-  }
 
   const handleClearLeague = async () => {
     const approved = window.confirm(`למחוק את כל הנתונים של הליגה ${activeLeague?.name ?? activeLeagueId}?`)
@@ -46,6 +38,13 @@ function App() {
     const approved = window.confirm(`לאפס את הליגה ${activeLeague?.name ?? activeLeagueId} לדאטת ה-mock המקורית?`)
     if (!approved) return
     await resetActiveLeagueToMockData()
+  }
+
+  const handleSaveNewLeague = () => {
+    if (!adminMode || !newLeagueName.trim()) return
+    createLeague({ name: newLeagueName, type: newLeagueType })
+    setNewLeagueName('')
+    setNewLeagueType(LEAGUE_TYPES.tournament)
   }
 
   const handleLeagueMetaChange = (field, value) => {
@@ -132,19 +131,6 @@ function App() {
               className="h-5 w-5"
             />
           </label>
-          <select
-            value={activeDataset}
-            onChange={handleDatasetChange}
-            data-testid="dataset-select"
-            disabled={!adminMode}
-            className="rounded-xl border px-3 py-2 text-sm disabled:opacity-50"
-          >
-            {AVAILABLE_DATASETS.map((dataset) => (
-              <option key={dataset} value={dataset}>
-                {dataset}
-              </option>
-            ))}
-          </select>
           <button
             onClick={handleClearLeague}
             data-testid="clear-league-data"
@@ -156,11 +142,46 @@ function App() {
           <button
             onClick={handleResetLeagueToMockData}
             data-testid="reset-league-to-mock"
-            disabled={!adminMode || !isResetEnabled || isLoading}
+            disabled={activeDataset !== 'test' || !adminMode || !isResetEnabled || isLoading}
             className="rounded-xl border px-3 py-2 text-sm disabled:opacity-50"
           >
             שחזר mock data
           </button>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-dashed border-gray-300 p-3">
+          <h3 className="text-sm font-semibold text-gray-800">הוספת ליגה חדשה</h3>
+          <p className="mt-1 text-xs text-gray-600">שם, סוג ליגה ושמירה. הליגה החדשה תיבחר אוטומטית.</p>
+          <div className="mt-3 flex flex-wrap items-end gap-2">
+            <input
+              value={newLeagueName}
+              onChange={(event) => setNewLeagueName(event.target.value)}
+              disabled={!adminMode || isLoading}
+              data-testid="add-league-name"
+              className="min-w-[10rem] flex-1 rounded-xl border px-3 py-2 text-sm disabled:opacity-50"
+              placeholder="שם הליגה"
+            />
+            <select
+              value={newLeagueType}
+              onChange={(event) => setNewLeagueType(event.target.value)}
+              disabled={!adminMode || isLoading}
+              data-testid="add-league-type"
+              className="rounded-xl border px-3 py-2 text-sm disabled:opacity-50"
+            >
+              <option value={LEAGUE_TYPES.tournament}>{getLeagueTypeLabel(LEAGUE_TYPES.tournament)}</option>
+              <option value={LEAGUE_TYPES.regular}>{getLeagueTypeLabel(LEAGUE_TYPES.regular)}</option>
+              <option value={LEAGUE_TYPES.friendly}>{getLeagueTypeLabel(LEAGUE_TYPES.friendly)}</option>
+            </select>
+            <button
+              type="button"
+              onClick={handleSaveNewLeague}
+              disabled={!adminMode || isLoading || !newLeagueName.trim()}
+              data-testid="add-league-save"
+              className="rounded-xl bg-black px-4 py-2 text-sm text-white disabled:opacity-40"
+            >
+              שמור ליגה
+            </button>
+          </div>
         </div>
 
         {activeLeague ? (

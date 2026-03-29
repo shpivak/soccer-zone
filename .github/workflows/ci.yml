@@ -30,5 +30,7 @@ jobs:
         run: npm run lint
 
       - name: Run end-to-end tests
+        env:
+          VITE_DEFAULT_DATASET: test
         run: npm run test:e2e
 

@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { APP_CONFIG } from '../config'
 import { AppContext } from './appContextInstance'
 import { getDefaultLeagueData } from '../utils/defaultData'
 import {
-  getActiveDataset,
   getActiveLeague,
   isResetAllowed,
   loadDatasetData,
   saveLeagues,
   savePlayers,
   saveTournaments,
-  setActiveDataset as persistActiveDataset,
   setActiveLeague as persistActiveLeague,
 } from '../utils/dataService'
+import { LEAGUE_TYPES } from '../utils/leagueUtils'
+import { DEFAULT_DATASET, isSupabaseConfigured } from '../utils/storageConfig'
 
 export const AppProvider = ({ children }) => {
-  const [activeDataset, setActiveDataset] = useState(getActiveDataset())
+  const activeDataset = DEFAULT_DATASET
   const [activeLeagueId, setActiveLeagueId] = useState(getActiveLeague())
   const [leagues, setLeagues] = useState([])
   const [players, setPlayers] = useState([])
@@ -24,12 +25,22 @@ export const AppProvider = ({ children }) => {
   const loadedDatasetRef = useRef('')
   const loadRequestIdRef = useRef(0)
   const dataRevisionRef = useRef(0)
+  const leaguesRef = useRef(leagues)
+  const playersRef = useRef(players)
+  const tournamentsRef = useRef(tournaments)
+  const supabaseSaveChainRef = useRef(Promise.resolve())
 
   const markDataDirty = () => {
     dataRevisionRef.current += 1
   }
 
-  const loadData = async (dataset) => {
+  useEffect(() => {
+    leaguesRef.current = leagues
+    playersRef.current = players
+    tournamentsRef.current = tournaments
+  })
+
+  const loadData = useCallback(async (dataset) => {
     const requestId = loadRequestIdRef.current + 1
     loadRequestIdRef.current = requestId
     const revisionAtStart = dataRevisionRef.current
@@ -49,17 +60,12 @@ export const AppProvider = ({ children }) => {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [])
 
-  const changeDataset = (dataset) => {
-    setActiveDataset(dataset)
-    persistActiveDataset(dataset)
-  }
-
-  const changeLeague = (leagueId) => {
+  const changeLeague = useCallback((leagueId) => {
     setActiveLeagueId(leagueId)
     persistActiveLeague(leagueId)
-  }
+  }, [])
 
   const updateLeagues = useCallback((updater) => {
     markDataDirty()
@@ -77,29 +83,49 @@ export const AppProvider = ({ children }) => {
   }, [])
 
   useEffect(() => {
-    loadData(activeDataset)
-  }, [activeDataset])
+    loadData(DEFAULT_DATASET)
+  }, [loadData])
 
   useEffect(() => {
-    if (loadedDatasetRef.current !== activeDataset) return
-    saveLeagues(activeDataset, leagues).catch((saveError) => {
-      setError(saveError instanceof Error ? saveError.message : 'Failed to save leagues')
-    })
-  }, [activeDataset, leagues])
+    if (loadedDatasetRef.current !== DEFAULT_DATASET) return
+ 
+    const flushLocal = () => {
+      const L = leaguesRef.current
+      const P = playersRef.current
+      const T = tournamentsRef.current
+      saveLeagues(DEFAULT_DATASET, L).catch((saveError) => {
+        setError(saveError instanceof Error ? saveError.message : 'Failed to save leagues')
+      })
+      savePlayers(DEFAULT_DATASET, P).catch((saveError) => {
+        setError(saveError instanceof Error ? saveError.message : 'Failed to save players')
+      })
+      saveTournaments(DEFAULT_DATASET, T).catch((saveError) => {
+        setError(saveError instanceof Error ? saveError.message : 'Failed to save tournaments')
+      })
+    }
 
-  useEffect(() => {
-    if (loadedDatasetRef.current !== activeDataset) return
-    savePlayers(activeDataset, players).catch((saveError) => {
-      setError(saveError instanceof Error ? saveError.message : 'Failed to save players')
-    })
-  }, [activeDataset, players])
+    if (!isSupabaseConfigured()) {
+      flushLocal()
+      return
+    }
 
-  useEffect(() => {
-    if (loadedDatasetRef.current !== activeDataset) return
-    saveTournaments(activeDataset, tournaments).catch((saveError) => {
-      setError(saveError instanceof Error ? saveError.message : 'Failed to save tournaments')
-    })
-  }, [activeDataset, tournaments])
+    const timer = window.setTimeout(() => {
+      supabaseSaveChainRef.current = supabaseSaveChainRef.current
+        .then(async () => {
+          const L = leaguesRef.current
+          const P = playersRef.current
+          const T = tournamentsRef.current
+          await saveLeagues(DEFAULT_DATASET, L)
+          await savePlayers(DEFAULT_DATASET, P)
+          await saveTournaments(DEFAULT_DATASET, T)
+        })
+        .catch((saveError) => {
+          setError(saveError instanceof Error ? saveError.message : 'Failed to save data')
+        })
+    }, 300)
+
+    return () => window.clearTimeout(timer)
+  }, [leagues, players, tournaments])
 
   useEffect(() => {
     if (leagues.length === 0) return
@@ -124,8 +150,22 @@ export const AppProvider = ({ children }) => {
       setLeagues: updateLeagues,
       setPlayers: updatePlayers,
       setTournaments: updateTournaments,
-      setActiveDataset: changeDataset,
       setActiveLeagueId: changeLeague,
+      createLeague: ({ name, type }) => {
+        const trimmed = name?.trim() ?? ''
+        const safeType = Object.values(LEAGUE_TYPES).includes(type) ? type : LEAGUE_TYPES.tournament
+        const id = `league-${Date.now()}`
+        const newLeague = {
+          id,
+          name: trimmed || APP_CONFIG.defaultLeagueName,
+          type: safeType,
+          seasonLabel: String(new Date().getFullYear()),
+          allowRosterEdits: false,
+          teams: [],
+        }
+        updateLeagues((current) => [...current, newLeague])
+        changeLeague(id)
+      },
       clearActiveLeagueData: async () => {
         updatePlayers((current) => current.filter((player) => player.leagueId !== activeLeagueId))
         updateTournaments((current) => current.filter((tournament) => tournament.leagueId !== activeLeagueId))
@@ -134,6 +174,9 @@ export const AppProvider = ({ children }) => {
         )
       },
       resetActiveLeagueToMockData: async () => {
+        if (activeDataset !== 'test') {
+          throw new Error('Mock data restore is only allowed in the "test" dataset.')
+        }
         const defaults = getDefaultLeagueData(activeLeagueId)
         updatePlayers((current) => [
           ...current.filter((player) => player.leagueId !== activeLeagueId),
@@ -159,6 +202,7 @@ export const AppProvider = ({ children }) => {
       updateLeagues,
       updatePlayers,
       updateTournaments,
+      changeLeague,
     ],
   )
 
