@@ -173,18 +173,18 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
                 disabled={disabled}
                 onClick={() => setIsClockRunning(true)}
                 data-testid="game-timer-start"
-                className="rounded-xl bg-emerald-500 px-3 py-2 text-sm font-semibold text-black"
+                className="rounded-xl bg-emerald-500 px-3 py-2 text-lg font-semibold text-black"
               >
-                Start
+                ▶
               </button>
               <button
                 type="button"
                 disabled={disabled}
                 onClick={() => setIsClockRunning(false)}
                 data-testid="game-timer-pause"
-                className="rounded-xl bg-amber-400 px-3 py-2 text-sm font-semibold text-black"
+                className="rounded-xl bg-amber-400 px-3 py-2 text-lg font-semibold text-black"
               >
-                Pause
+                ⏸
               </button>
               <button
                 type="button"
@@ -194,9 +194,9 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
                   setClockSeconds(0)
                 }}
                 data-testid="game-timer-reset"
-                className="rounded-xl bg-white/10 px-3 py-2 text-sm"
+                className="rounded-xl bg-white/10 px-3 py-2 text-lg"
               >
-                Reset
+                🔄
               </button>
             </div>
           </div>

@@ -25,6 +25,11 @@ const setTeamPlayer = async (page, teamId, playerName, assigned = true) => {
   await dragPlayer(page, playerName, assigned ? `team-card-${teamId}` : 'team-card-bench')
 }
 
+const enableAdminMode = async (page) => {
+  await page.getByTestId('admin-password-input').fill('SoccerZone26')
+  await page.getByTestId('admin-unlock-button').click()
+}
+
 const setScore = async (page, side, score) => {
   const display = page.getByTestId(`score-${side}-input`)
   const plus = page.getByTestId(`score-${side}-plus`)
@@ -92,7 +97,13 @@ test('main navigation, dropdown labels, and tournament stats render for the sele
 
 test('management controls are separated and empty tournament leagues can still start from scratch', async ({ page }) => {
   await expect(page.getByTestId('management-panel')).toBeVisible()
-  await expect(page.getByTestId('admin-toggle')).toBeChecked()
+  // Admin is off by default — controls are hidden until unlocked
+  await expect(page.getByTestId('admin-password-input')).toBeVisible()
+  await expect(page.getByTestId('add-league-name')).toHaveCount(0)
+  await expect(page.getByTestId('clear-league-data')).toHaveCount(0)
+
+  await enableAdminMode(page)
+  await expect(page.getByTestId('admin-password-input')).toHaveCount(0)
   await expect(page.getByTestId('add-league-name')).toBeVisible()
   await expect(page.getByTestId('clear-league-data')).toBeEnabled()
   await expect(page.getByTestId('reset-league-to-mock')).toBeEnabled()
@@ -112,6 +123,7 @@ test('management controls are separated and empty tournament leagues can still s
 })
 
 test('management actions clear the selected league and can restore its mock data after confirmation', async ({ page }) => {
+  await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('tournament-1')
   await expect(page.locator('[data-testid="tournament-select"] option')).toHaveCount(2)
 
@@ -132,6 +144,7 @@ test('management actions clear the selected league and can restore its mock data
 })
 
 test('player and team changes persist after refresh and league switching', async ({ page }) => {
+  await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('tournament-2')
   await expect(page.getByText('אין טורניר זמין. ניתן ליצור טורניר חדש.')).toBeVisible()
 
@@ -159,6 +172,7 @@ test('player and team changes persist after refresh and league switching', async
 })
 
 test('saved tournament games persist after refresh and league switching', async ({ page }) => {
+  await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('tournament-2')
   await expect(page.getByText('אין טורניר זמין. ניתן ליצור טורניר חדש.')).toBeVisible()
   await page.getByTestId('create-tournament-empty').click()
@@ -196,7 +210,7 @@ test('saved tournament games persist after refresh and league switching', async 
 test('team builder enforces unique players, max seven players, and team color changes for tournament leagues', async ({
   page,
 }) => {
-  await page.getByTestId('admin-toggle').check()
+  await enableAdminMode(page)
   await addPlayers(page, ['תוספת 1', 'תוספת 2'])
 
   await page.getByTestId('team-color-select-team1').selectOption('blue')
@@ -220,7 +234,7 @@ test('team builder enforces unique players, max seven players, and team color ch
 test('games, scoring events, standings, editing, deleting, undo, and stats updates work end to end', async ({
   page,
 }) => {
-  await page.getByTestId('admin-toggle').check()
+  await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('tournament-2')
   await expect(page.getByText('אין טורניר זמין. ניתן ליצור טורניר חדש.')).toBeVisible()
   await page.getByTestId('create-tournament-empty').click()
@@ -289,7 +303,7 @@ test('games, scoring events, standings, editing, deleting, undo, and stats updat
 })
 
 test('editing a seeded game result updates live standings, tournament games, and stats', async ({ page }) => {
-  await page.getByTestId('admin-toggle').check()
+  await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('tournament-3')
   await page.getByTestId('tournament-select').selectOption('2026-03-07-sb')
 
@@ -317,7 +331,7 @@ test('editing a seeded game result updates live standings, tournament games, and
 test('adding a new game to a seeded tournament updates live standings, games list, and stats', async ({
   page,
 }) => {
-  await page.getByTestId('admin-toggle').check()
+  await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('tournament-3')
   await page.getByTestId('tournament-select').selectOption('2026-03-07-sb')
 
@@ -362,7 +376,7 @@ test('regular league stats show a league table and summary leaders without the f
 })
 
 test('regular league roster editing can be enabled after round one', async ({ page }) => {
-  await page.getByTestId('admin-toggle').check()
+  await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('regular-1')
   await page.getByTestId('tournament-select').selectOption('regular-1-mw2')
 
@@ -424,6 +438,7 @@ test('stats summary leaders match the maximum values in the stats table', async 
 })
 
 test('bug-1: tournament teams should not be pre-filled to max capacity on creation', async ({ page }) => {
+  await enableAdminMode(page)
   // Switch to an empty tournament league and create a new tournament
   await page.getByTestId('league-select').selectOption('tournament-2')
   await expect(page.getByText('אין טורניר זמין. ניתן ליצור טורניר חדש.')).toBeVisible()
@@ -444,6 +459,7 @@ test('bug-1: tournament teams should not be pre-filled to max capacity on creati
 })
 
 test('bug-1b: adding player to one team does not reset assignments in other teams', async ({ page }) => {
+  await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('tournament-2')
   await page.getByTestId('create-tournament-empty').click()
 
@@ -458,7 +474,7 @@ test('bug-1b: adding player to one team does not reset assignments in other team
 })
 
 test('bug-2: player can be deleted from bench but not from a team', async ({ page }) => {
-  await page.getByTestId('admin-toggle').check()
+  await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('tournament-2')
   await page.getByTestId('create-tournament-empty').click()
 
@@ -481,7 +497,7 @@ test('bug-2: player can be deleted from bench but not from a team', async ({ pag
 })
 
 test('bug-3: offense and defense toggles update player roles', async ({ page }) => {
-  await page.getByTestId('admin-toggle').check()
+  await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('tournament-2')
   await page.getByTestId('create-tournament-empty').click()
 
@@ -522,7 +538,7 @@ test('bug-3: offense and defense toggles update player roles', async ({ page }) 
 })
 
 test('bug-3b: offense and defense can both be toggled off (none state)', async ({ page }) => {
-  await page.getByTestId('admin-toggle').check()
+  await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('tournament-2')
   await page.getByTestId('create-tournament-empty').click()
 
@@ -548,7 +564,7 @@ test('bug-3b: offense and defense can both be toggled off (none state)', async (
 })
 
 test('bug-4b: צור מחזור works first click after clearing regular league data', async ({ page }) => {
-  await page.getByTestId('admin-toggle').check()
+  await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('regular-1')
 
   // Clear the league data
@@ -562,6 +578,7 @@ test('bug-4b: צור מחזור works first click after clearing regular league 
 })
 
 test('player count indicator shows current and max players per team', async ({ page }) => {
+  await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('tournament-2')
   await page.getByTestId('create-tournament-empty').click()
 
@@ -579,7 +596,7 @@ test('player count indicator shows current and max players per team', async ({ p
 })
 
 test('bug-4: צור מחזור creates a new round on first click for regular league', async ({ page }) => {
-  await page.getByTestId('admin-toggle').check()
+  await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('regular-1')
 
   const countBefore = await page.locator('[data-testid="tournament-select"] option').count()
@@ -593,4 +610,37 @@ test('bug-4: צור מחזור creates a new round on first click for regular le
   await page.reload()
   await page.getByTestId('league-select').selectOption('regular-1')
   await expect(page.locator('[data-testid="tournament-select"] option')).toHaveCount(countBefore + 1)
+})
+
+test('admin mode requires password, hides controls when locked, and persists in session storage', async ({ page }) => {
+  // Admin is off by default — only password prompt is visible
+  await expect(page.getByTestId('admin-password-input')).toBeVisible()
+  await expect(page.getByTestId('admin-unlock-button')).toBeVisible()
+  await expect(page.getByTestId('clear-league-data')).toHaveCount(0)
+  await expect(page.getByTestId('add-league-name')).toHaveCount(0)
+
+  // Wrong password shows error and stays locked
+  await page.getByTestId('admin-password-input').fill('wrongpassword')
+  await page.getByTestId('admin-unlock-button').click()
+  await expect(page.getByTestId('admin-password-error')).toBeVisible()
+  await expect(page.getByTestId('admin-password-input')).toBeVisible()
+  await expect(page.getByTestId('clear-league-data')).toHaveCount(0)
+
+  // Correct password unlocks and shows all admin controls
+  await enableAdminMode(page)
+  await expect(page.getByTestId('admin-password-input')).toHaveCount(0)
+  await expect(page.getByTestId('admin-lock-button')).toBeVisible()
+  await expect(page.getByTestId('clear-league-data')).toBeVisible()
+  await expect(page.getByTestId('add-league-name')).toBeVisible()
+
+  // After reload, admin mode is still active (session storage)
+  await page.reload()
+  await expect(page.getByTestId('admin-password-input')).toHaveCount(0)
+  await expect(page.getByTestId('clear-league-data')).toBeVisible()
+
+  // Lock button returns to locked state and hides controls
+  await page.getByTestId('admin-lock-button').click()
+  await expect(page.getByTestId('admin-password-input')).toBeVisible()
+  await expect(page.getByTestId('clear-league-data')).toHaveCount(0)
+  await expect(page.getByTestId('add-league-name')).toHaveCount(0)
 })
