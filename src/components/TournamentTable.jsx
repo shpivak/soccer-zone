@@ -17,7 +17,7 @@ const TournamentTable = ({ games, teams, league, onEdit, onDelete, readOnly }) =
                 onClick={() => onEdit(game)}
                 disabled={readOnly}
                 data-testid={`edit-game-${game.id}`}
-                className="rounded-lg border px-3 py-2 text-sm disabled:opacity-40"
+                className="rounded-lg bg-green-600 px-3 py-2 text-sm text-white disabled:opacity-40"
               >
                 עריכה
               </button>

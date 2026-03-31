@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import CollapsibleSection from '../components/CollapsibleSection'
 import GameInput from '../components/GameInput'
 import ScoreBoard from '../components/ScoreBoard'
 import TeamBuilder from '../components/TeamBuilder'
@@ -8,10 +9,10 @@ import { useAppContext } from '../hooks/useAppContext'
 import { useTournamentEditor } from '../hooks/useTournamentEditor'
 import {
   canEditTeamsInLiveMode,
-  getLeagueTypeLabel,
   getLeagueModeLabels,
   getMaxPlayersPerTeam,
   getSessionGamesLimit,
+  getSessionLabel,
   LEAGUE_TYPES,
 } from '../utils/leagueUtils'
 import { calculateLeagueStandings, calculateStandings } from '../utils/tournamentUtils'
@@ -19,7 +20,10 @@ import { calculateLeagueStandings, calculateStandings } from '../utils/tournamen
 const LiveTournament = ({ adminMode }) => {
   const { activeLeagueId, leagues, players, tournaments, setLeagues, setPlayers, setTournaments } = useAppContext()
   const league = leagues.find((item) => item.id === activeLeagueId) ?? null
-  const leaguePlayers = useMemo(() => players.filter((player) => player.leagueId === activeLeagueId), [activeLeagueId, players])
+  const leaguePlayers = useMemo(
+    () => players.filter((player) => player.leagueId === activeLeagueId),
+    [activeLeagueId, players],
+  )
   const leagueTournaments = useMemo(
     () => tournaments.filter((tournament) => tournament.leagueId === activeLeagueId),
     [activeLeagueId, tournaments],
@@ -27,7 +31,6 @@ const LiveTournament = ({ adminMode }) => {
   const { selectedTournamentId, setSelectedTournamentId, selectedTournament, createTournament } =
     useTournamentEditor(leagueTournaments, leaguePlayers, league)
   const [editingGame, setEditingGame] = useState(null)
-  const [newPlayerName, setNewPlayerName] = useState('')
   const [teamBuilderMessage, setTeamBuilderMessage] = useState('')
   const [gameInputMessage, setGameInputMessage] = useState('')
   const labels = getLeagueModeLabels(league?.type)
@@ -62,7 +65,9 @@ const LiveTournament = ({ adminMode }) => {
       }),
     )
     setTournaments((current) =>
-      current.map((item) => (item.leagueId === league.id ? { ...item, teams: nextTeams.map((team) => ({ ...team })) } : item)),
+      current.map((item) =>
+        item.leagueId === league.id ? { ...item, teams: nextTeams.map((team) => ({ ...team })) } : item,
+      ),
     )
   }
 
@@ -83,10 +88,10 @@ const LiveTournament = ({ adminMode }) => {
     const targetTeams = league.type === LEAGUE_TYPES.regular ? league.teams ?? [] : selectedTournament?.teams ?? []
     const targetTeam = targetTeams.find((team) => team.id === teamId)
     const playerCurrentTeam = targetTeams.find((team) => team.players.includes(playerId))
-    const maxPlayersPerTeam = getMaxPlayersPerTeam(league)
+    const max = getMaxPlayersPerTeam(league)
 
-    if (teamId && targetTeam && targetTeam.players.length >= maxPlayersPerTeam && playerCurrentTeam?.id !== teamId) {
-      setTeamBuilderMessage(`אי אפשר להוסיף יותר מ-${maxPlayersPerTeam} שחקנים לקבוצה.`)
+    if (teamId && targetTeam && targetTeam.players.length >= max && playerCurrentTeam?.id !== teamId) {
+      setTeamBuilderMessage(`אי אפשר להוסיף יותר מ-${max} שחקנים לקבוצה.`)
       return
     }
 
@@ -102,7 +107,6 @@ const LiveTournament = ({ adminMode }) => {
       syncRegularLeagueTeams(applyUpdate)
       return
     }
-
     updateSelectedTournament((tournament) => ({ teams: applyUpdate(tournament.teams) }))
   }
 
@@ -111,7 +115,7 @@ const LiveTournament = ({ adminMode }) => {
     setPlayers((current) => current.filter((player) => player.id !== playerId))
     if (league.type === LEAGUE_TYPES.regular) {
       syncRegularLeagueTeams((teams) =>
-        teams.map((team) => ({ ...team, players: team.players.filter((id) => id !== playerId) }))
+        teams.map((team) => ({ ...team, players: team.players.filter((id) => id !== playerId) })),
       )
     } else if (selectedTournament) {
       updateSelectedTournament((tournament) => ({
@@ -131,6 +135,40 @@ const LiveTournament = ({ adminMode }) => {
         return { ...player, [field]: !player[field] }
       }),
     )
+  }
+
+  const handleAddPlayer = (name, teamId = null) => {
+    if (!adminMode || !name.trim()) return
+    const max = teamId ? getMaxPlayersPerTeam(league) : null
+    if (teamId && max) {
+      const targetTeams =
+        league.type === LEAGUE_TYPES.regular ? league.teams ?? [] : selectedTournament?.teams ?? []
+      const targetTeam = targetTeams.find((team) => team.id === teamId)
+      if (targetTeam && targetTeam.players.length >= max) {
+        setTeamBuilderMessage(`אי אפשר להוסיף יותר מ-${max} שחקנים לקבוצה.`)
+        return
+      }
+    }
+    setTeamBuilderMessage('')
+    const nextPlayer = {
+      id: `p${Date.now()}`,
+      name: name.trim(),
+      leagueId: activeLeagueId,
+      isOffense: false,
+      isDefense: false,
+    }
+    setPlayers((current) => [...current, nextPlayer])
+    if (teamId) {
+      const applyAssign = (teams) =>
+        teams.map((team) =>
+          team.id === teamId ? { ...team, players: [...team.players, nextPlayer.id] } : team,
+        )
+      if (league.type === LEAGUE_TYPES.regular) {
+        syncRegularLeagueTeams(applyAssign)
+      } else {
+        updateSelectedTournament((tournament) => ({ teams: applyAssign(tournament.teams) }))
+      }
+    }
   }
 
   const handleSaveGame = (game) => {
@@ -204,7 +242,6 @@ const LiveTournament = ({ adminMode }) => {
       setTeamBuilderMessage(`אפשר להגדיר עד ${APP_CONFIG.friendly.maxTeams} קבוצות במשחקי ידידות.`)
       return
     }
-
     setTeamBuilderMessage('')
     updateSelectedTournament((tournament) => ({
       teams: [
@@ -212,24 +249,12 @@ const LiveTournament = ({ adminMode }) => {
         {
           id: `friendly-team-${Date.now()}`,
           name: '',
-          color: APP_CONFIG.allowedTeamColors[tournament.teams.length % APP_CONFIG.allowedTeamColors.length] ?? 'gray',
+          color:
+            APP_CONFIG.allowedTeamColors[tournament.teams.length % APP_CONFIG.allowedTeamColors.length] ?? 'gray',
           players: [],
         },
       ],
     }))
-  }
-
-  const handleAddPlayer = () => {
-    if (!adminMode || !newPlayerName.trim()) return
-    const nextPlayer = {
-      id: `p${Date.now()}`,
-      name: newPlayerName.trim(),
-      leagueId: activeLeagueId,
-      isOffense: false,
-      isDefense: false,
-    }
-    setPlayers((current) => [...current, nextPlayer])
-    setNewPlayerName('')
   }
 
   if (!league) return null
@@ -241,7 +266,7 @@ const LiveTournament = ({ adminMode }) => {
         <button
           onClick={handleCreateTournament}
           data-testid="create-tournament-empty"
-          className="mt-3 rounded-xl bg-black px-4 py-3 text-white"
+          className="mt-3 min-h-[48px] rounded-xl bg-green-600 px-6 py-3 text-white"
         >
           {labels.create}
         </button>
@@ -249,76 +274,75 @@ const LiveTournament = ({ adminMode }) => {
     )
   }
 
+  const undoButton = (
+    <button
+      onClick={handleUndoLastGame}
+      disabled={!adminMode || selectedTournament.games.length === 0}
+      data-testid="undo-last-game"
+      className="min-h-[40px] rounded-xl border px-3 py-1.5 text-sm disabled:opacity-30"
+    >
+      ↩
+    </button>
+  )
+
   return (
-    <div className="space-y-4">
-      <header className="sticky top-0 z-10 rounded-2xl bg-white p-4 shadow-sm">
-        <h1 className="text-xl font-bold">{labels.liveTitle}</h1>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {selectedTournament ? (
-            <select
-              value={selectedTournamentId}
-              onChange={(e) => setSelectedTournamentId(e.target.value)}
-              data-testid="tournament-select"
-              className="rounded-xl border p-3"
-            >
-              {leagueTournaments.map((tournament) => (
-                <option key={tournament.id} value={tournament.id}>
-                  {league.name} {labels.selectLabel} {tournament.leagueNumber ?? '-'} / {tournament.year ?? '-'} - {tournament.date}
-                </option>
-              ))}
-            </select>
-          ) : null}
-          <button
-            onClick={handleCreateTournament}
-            disabled={!adminMode}
-            data-testid={selectedTournament ? 'create-tournament' : 'create-tournament-empty'}
-            className="rounded-xl bg-black px-4 py-3 text-white disabled:opacity-40"
-          >
-            {selectedTournament ? labels.createAnother : labels.create}
-          </button>
-          <button
-            onClick={handleUndoLastGame}
-            disabled={!adminMode || !selectedTournament || selectedTournament.games.length === 0}
-            data-testid="undo-last-game"
-            className="rounded-xl border px-4 py-3 disabled:opacity-40"
-          >
-            בטל משחק אחרון
-          </button>
+    <div className="space-y-3">
+      {/* Round / game-day row */}
+      <div className="rounded-2xl bg-white p-3 shadow-sm">
+        <h2 className="mb-2 text-sm font-bold text-gray-700">{labels.liveTitle}</h2>
+        <div className="flex items-center gap-2">
+        <select
+          value={selectedTournamentId}
+          onChange={(e) => setSelectedTournamentId(e.target.value)}
+          data-testid="tournament-select"
+          className="min-w-0 flex-1 rounded-xl border px-3 py-2.5 text-sm"
+        >
+          {leagueTournaments.map((tournament) => (
+            <option key={tournament.id} value={tournament.id}>
+              {league.name} {labels.selectLabel} {tournament.leagueNumber ?? '-'} / {tournament.year ?? '-'} -{' '}
+              {tournament.date}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={handleCreateTournament}
+          disabled={!adminMode}
+          data-testid="create-tournament"
+          className="shrink-0 min-h-[44px] rounded-xl bg-green-600 px-4 py-2.5 text-sm text-white disabled:opacity-40"
+        >
+          {labels.createAnother}
+        </button>
         </div>
-        <p className="mt-2 text-sm text-gray-600">ליגה נבחרת: {league.name}</p>
-        <p className="mt-1 text-sm text-gray-600">
-          סוג ליגה: {getLeagueTypeLabel(league.type)} | עונה: {league.seasonLabel || '-'}
-        </p>
-      </header>
+      </div>
 
-      <section className="rounded-2xl bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-lg font-bold">הוספת שחקן חדש</h2>
-        <div className="flex gap-2">
-          <input
-            value={newPlayerName}
-            disabled={!adminMode}
-            onChange={(event) => setNewPlayerName(event.target.value)}
-            placeholder="הקלד שם שחקן חדש"
-            data-testid="new-player-input"
-            className="flex-1 rounded-xl border p-3"
-          />
-          <button
-            onClick={handleAddPlayer}
-            disabled={!adminMode || !newPlayerName.trim()}
-            data-testid="add-player-button"
-            className="rounded-xl bg-black px-4 py-3 text-white disabled:opacity-40"
-          >
-            הוסף
-          </button>
-        </div>
-      </section>
+      {/* Game input */}
+      <GameInput
+        key={editingGame?.id ?? `${selectedTournament.id}-new-game`}
+        teams={selectedTournament.teams}
+        players={leaguePlayers}
+        disabled={!adminMode}
+        onSave={handleSaveGame}
+        editingGame={editingGame}
+        onCancelEdit={() => setEditingGame(null)}
+        message={gameInputMessage}
+      />
 
+      {/* Live standings */}
+      {league.type !== LEAGUE_TYPES.friendly ? (
+        <ScoreBoard
+          standings={standings}
+          title={league.type === LEAGUE_TYPES.regular ? 'טבלת ליגה כוללת' : 'טבלת מצב חיה'}
+          showGoals={league.type === LEAGUE_TYPES.regular}
+        />
+      ) : null}
+
+      {/* Teams — collapsible drawer */}
       {league.type === LEAGUE_TYPES.regular ? (
-        <section className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg font-bold">הגדרת קבוצות</h2>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">
+        <CollapsibleSection
+          title="הגדרת קבוצות"
+          headerExtra={
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5 rounded-xl border px-2 py-1.5 text-xs">
                 <input
                   type="checkbox"
                   checked={league.allowRosterEdits === true}
@@ -333,103 +357,108 @@ const LiveTournament = ({ adminMode }) => {
                   data-testid="regular-roster-edit-toggle"
                   className="h-4 w-4"
                 />
-                <span>אפשר עריכת סגל</span>
+                <span>עריכת סגל</span>
               </label>
               <button
                 onClick={handleAddRegularTeam}
                 disabled={!adminMode || !isRegularSetupEditable}
                 data-testid="add-regular-team"
-                className="rounded-xl border px-3 py-2 text-sm disabled:opacity-40"
+                className="min-h-[36px] rounded-xl border px-3 py-1.5 text-sm disabled:opacity-40"
               >
-                הוסף קבוצה
+                + קבוצה
               </button>
             </div>
-          </div>
+          }
+        >
+          {teamBuilderMessage ? (
+            <p data-testid="team-builder-message" className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+              {teamBuilderMessage}
+            </p>
+          ) : null}
           <TeamBuilder
             teams={selectedTournament?.teams ?? []}
             players={leaguePlayers}
             maxPlayersPerTeam={maxPlayersPerTeam}
             disabled={!adminMode || !isRegularSetupEditable}
+            adminMode={adminMode}
             onMovePlayer={handleMovePlayer}
             onChangeTeamColor={() => {}}
             onChangeTeamName={handleChangeTeamName}
             onTogglePlayerRole={handleTogglePlayerRole}
             onDeletePlayer={handleDeletePlayer}
-            message={teamBuilderMessage}
+            onAddPlayer={handleAddPlayer}
             allowColorEdit={false}
             allowNameEdit={isRegularSetupEditable}
           />
-        </section>
+        </CollapsibleSection>
       ) : league.type === LEAGUE_TYPES.friendly ? (
-        <section className="space-y-3 rounded-2xl bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg font-bold">בניית קבוצות ידידות</h2>
+        <CollapsibleSection
+          title="בניית קבוצות ידידות"
+          headerExtra={
             <button
               onClick={handleAddFriendlyTeam}
               disabled={!adminMode}
               data-testid="add-friendly-team"
-              className="rounded-xl border px-3 py-2 text-sm disabled:opacity-40"
+              className="min-h-[36px] rounded-xl border px-3 py-1.5 text-sm disabled:opacity-40"
             >
-              הוסף קבוצה
+              + קבוצה
             </button>
-          </div>
+          }
+        >
+          {teamBuilderMessage ? (
+            <p data-testid="team-builder-message" className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+              {teamBuilderMessage}
+            </p>
+          ) : null}
           <TeamBuilder
             teams={selectedTournament?.teams ?? []}
             players={leaguePlayers}
             maxPlayersPerTeam={maxPlayersPerTeam}
             disabled={!adminMode}
+            adminMode={adminMode}
             onMovePlayer={handleMovePlayer}
             onChangeTeamColor={handleChangeTeamColor}
             onTogglePlayerRole={handleTogglePlayerRole}
             onDeletePlayer={handleDeletePlayer}
-            message={teamBuilderMessage}
+            onAddPlayer={handleAddPlayer}
           />
-        </section>
+        </CollapsibleSection>
       ) : (
-        <TeamBuilder
-          teams={selectedTournament?.teams ?? []}
-          players={leaguePlayers}
-          maxPlayersPerTeam={maxPlayersPerTeam}
-          disabled={!adminMode}
-          onMovePlayer={handleMovePlayer}
-          onChangeTeamColor={handleChangeTeamColor}
-          onTogglePlayerRole={handleTogglePlayerRole}
-          onDeletePlayer={handleDeletePlayer}
-          message={teamBuilderMessage}
-        />
+        <CollapsibleSection title="בניית קבוצות">
+          {teamBuilderMessage ? (
+            <p data-testid="team-builder-message" className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+              {teamBuilderMessage}
+            </p>
+          ) : null}
+          <TeamBuilder
+            teams={selectedTournament?.teams ?? []}
+            players={leaguePlayers}
+            maxPlayersPerTeam={maxPlayersPerTeam}
+            disabled={!adminMode}
+            adminMode={adminMode}
+            onMovePlayer={handleMovePlayer}
+            onChangeTeamColor={handleChangeTeamColor}
+            onTogglePlayerRole={handleTogglePlayerRole}
+            onDeletePlayer={handleDeletePlayer}
+            onAddPlayer={handleAddPlayer}
+          />
+        </CollapsibleSection>
       )}
 
-      {selectedTournament ? (
-        <>
-          <GameInput
-            key={editingGame?.id ?? `${selectedTournament.id}-new-game`}
-            teams={selectedTournament.teams}
-            players={leaguePlayers}
-            disabled={!adminMode}
-            onSave={handleSaveGame}
-            editingGame={editingGame}
-            onCancelEdit={() => setEditingGame(null)}
-            message={gameInputMessage}
-          />
-
-          {league.type !== LEAGUE_TYPES.friendly ? (
-            <ScoreBoard
-              standings={standings}
-              title={league.type === LEAGUE_TYPES.regular ? 'טבלת ליגה כוללת' : 'טבלת מצב חיה'}
-              showGoals={league.type === LEAGUE_TYPES.regular}
-            />
-          ) : null}
-
-          <TournamentTable
-            league={league}
-            games={selectedTournament.games}
-            teams={selectedTournament.teams}
-            readOnly={!adminMode}
-            onEdit={setEditingGame}
-            onDelete={handleDeleteGame}
-          />
-        </>
-      ) : null}
+      {/* Previous games — collapsible drawer */}
+      <CollapsibleSection
+        title={`משחקים ב${getSessionLabel(league)} (${selectedTournament.games.length})`}
+        headerExtra={undoButton}
+      >
+        <TournamentTable
+          league={league}
+          games={selectedTournament.games}
+          teams={selectedTournament.teams}
+          readOnly={!adminMode}
+          onEdit={setEditingGame}
+          onDelete={handleDeleteGame}
+        />
+      </CollapsibleSection>
     </div>
   )
 }

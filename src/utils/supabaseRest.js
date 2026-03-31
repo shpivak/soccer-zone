@@ -10,6 +10,15 @@ const isMissingPlayerRoleColumnsError = (error) =>
   ((error.message.includes('is_offense') && error.message.includes('column')) ||
     (error.message.includes('is_defense') && error.message.includes('column')))
 
+// null = unknown, true/false = cached result for the lifetime of the page
+let playerRoleColumnsSupported = null
+
+const toPlayerRowBasic = (player) => ({
+  id: player.id,
+  name: player.name,
+  league_id: player.leagueId,
+})
+
 const isMissingTableError = (error, tableName) =>
   error instanceof Error && error.message.includes(`Could not find the table`) && error.message.includes(tableName)
 
@@ -180,12 +189,21 @@ const request = async (dataset, path, init = {}) => {
 }
 
 export const loadDatasetFromSupabase = async (dataset) => {
-  const playerPromise = request(dataset, `${PLAYERS_TABLE}?select=id,name,league_id,is_offense,is_defense&order=name.asc`).catch(
-    async (error) => {
-      if (!isMissingPlayerRoleColumnsError(error)) throw error
+  const fetchPlayers = async () => {
+    if (playerRoleColumnsSupported === false) {
       return request(dataset, `${PLAYERS_TABLE}?select=id,name,league_id&order=name.asc`)
-    },
-  )
+    }
+    try {
+      const rows = await request(dataset, `${PLAYERS_TABLE}?select=id,name,league_id,is_offense,is_defense&order=name.asc`)
+      playerRoleColumnsSupported = true
+      return rows
+    } catch (error) {
+      if (!isMissingPlayerRoleColumnsError(error)) throw error
+      playerRoleColumnsSupported = false
+      return request(dataset, `${PLAYERS_TABLE}?select=id,name,league_id&order=name.asc`)
+    }
+  }
+  const playerPromise = fetchPlayers()
   const leaguesPromise = request(
     dataset,
     `${LEAGUES_TABLE}?select=id,name,type,season_label,allow_roster_edits,teams&order=name.asc`,
@@ -251,28 +269,24 @@ export const saveLeaguesToSupabase = async (dataset, leagues) => {
 }
 
 export const savePlayersToSupabase = async (dataset, players) => {
-  try {
-    if (players.length > 0) {
-      await request(dataset, PLAYERS_TABLE, {
-        method: 'POST',
-        headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
-        body: JSON.stringify(players.map(toPlayerRow)),
-      })
-    }
-  } catch (error) {
-    if (!isMissingPlayerRoleColumnsError(error)) throw error
-    if (players.length > 0) {
-      await request(dataset, PLAYERS_TABLE, {
-        method: 'POST',
-        headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
-        body: JSON.stringify(
-          players.map((player) => ({
-            id: player.id,
-            name: player.name,
-            league_id: player.leagueId,
-          })),
-        ),
-      })
+  if (players.length > 0) {
+    const postOptions = (rows) => ({
+      method: 'POST',
+      headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
+      body: JSON.stringify(rows),
+    })
+
+    if (playerRoleColumnsSupported === false) {
+      await request(dataset, PLAYERS_TABLE, postOptions(players.map(toPlayerRowBasic)))
+    } else {
+      try {
+        await request(dataset, PLAYERS_TABLE, postOptions(players.map(toPlayerRow)))
+        playerRoleColumnsSupported = true
+      } catch (error) {
+        if (!isMissingPlayerRoleColumnsError(error)) throw error
+        playerRoleColumnsSupported = false
+        await request(dataset, PLAYERS_TABLE, postOptions(players.map(toPlayerRowBasic)))
+      }
     }
   }
 

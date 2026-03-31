@@ -121,7 +121,7 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
     <section className="rounded-2xl bg-white p-4 shadow-sm">
       <h2 className="mb-3 text-lg font-bold">{editingGame ? 'עריכת משחק' : 'הזנת משחק חדש'}</h2>
 
-      <div className="rounded-2xl border bg-gray-950 p-4 text-white">
+      <div className="rounded-2xl border bg-white p-4">
         <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr] md:items-center">
           <div className="space-y-3 text-center">
             <select
@@ -129,7 +129,7 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
               disabled={disabled}
               onChange={(event) => setTeamA(event.target.value)}
               data-testid="game-team-a-select"
-              className="w-full rounded-xl border border-white/20 bg-transparent p-2 text-center"
+              className="w-full rounded-xl border border-gray-300 bg-white p-2 text-center"
             >
               {teams.map((team) => (
                 <option key={team.id} value={team.id} className="text-black">
@@ -140,30 +140,31 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
             <div className="text-5xl font-black" data-testid="score-a-input">
               {scoreA}
             </div>
-            <div className="flex justify-center gap-2">
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => updateScore(teamA, 1)}
-                data-testid="score-a-plus"
-                className="rounded-xl bg-white/10 px-4 py-2"
-              >
-                +
-              </button>
-              <button
-                type="button"
-                disabled={disabled || scoreA === 0}
-                onClick={() => updateScore(teamA, -1)}
-                data-testid="score-a-minus"
-                className="rounded-xl bg-white/10 px-4 py-2 disabled:opacity-40"
-              >
-                -
-              </button>
-            </div>
+            {!disabled && (
+              <div className="flex justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => updateScore(teamA, 1)}
+                  data-testid="score-a-plus"
+                  className="min-h-[48px] min-w-[48px] rounded-xl bg-green-600 px-4 py-3 text-lg font-bold text-white"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  disabled={scoreA === 0}
+                  onClick={() => updateScore(teamA, -1)}
+                  data-testid="score-a-minus"
+                  className="min-h-[48px] min-w-[48px] rounded-xl bg-red-600 px-4 py-3 text-lg font-bold text-white disabled:opacity-40"
+                >
+                  -
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="space-y-3 text-center">
-            <div className="text-sm uppercase tracking-[0.3em] text-white/60">Live</div>
+            <div className="text-sm uppercase tracking-[0.3em] text-gray-400">Live</div>
             <div data-testid="game-timer-display" className="text-4xl font-black">
               {formatClock(clockSeconds)}
             </div>
@@ -173,18 +174,18 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
                 disabled={disabled}
                 onClick={() => setIsClockRunning(true)}
                 data-testid="game-timer-start"
-                className="rounded-xl bg-emerald-500 px-3 py-2 text-sm font-semibold text-black"
+                className="min-h-[44px] min-w-[44px] rounded-xl bg-emerald-500 px-3 py-2 text-lg font-semibold text-black"
               >
-                Start
+                ▶
               </button>
               <button
                 type="button"
                 disabled={disabled}
                 onClick={() => setIsClockRunning(false)}
                 data-testid="game-timer-pause"
-                className="rounded-xl bg-amber-400 px-3 py-2 text-sm font-semibold text-black"
+                className="min-h-[44px] min-w-[44px] rounded-xl bg-amber-400 px-3 py-2 text-lg font-semibold text-black"
               >
-                Pause
+                ⏸
               </button>
               <button
                 type="button"
@@ -194,9 +195,9 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
                   setClockSeconds(0)
                 }}
                 data-testid="game-timer-reset"
-                className="rounded-xl bg-white/10 px-3 py-2 text-sm"
+                className="min-h-[44px] min-w-[44px] rounded-xl bg-gray-100 px-3 py-2 text-lg"
               >
-                Reset
+                🔄
               </button>
             </div>
           </div>
@@ -207,7 +208,7 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
               disabled={disabled}
               onChange={(event) => setTeamB(event.target.value)}
               data-testid="game-team-b-select"
-              className="w-full rounded-xl border border-white/20 bg-transparent p-2 text-center"
+              className="w-full rounded-xl border border-gray-300 bg-white p-2 text-center"
             >
               {teams.map((team) => (
                 <option key={team.id} value={team.id} className="text-black">
@@ -218,26 +219,27 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
             <div className="text-5xl font-black" data-testid="score-b-input">
               {scoreB}
             </div>
-            <div className="flex justify-center gap-2">
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => updateScore(teamB, 1)}
-                data-testid="score-b-plus"
-                className="rounded-xl bg-white/10 px-4 py-2"
-              >
-                +
-              </button>
-              <button
-                type="button"
-                disabled={disabled || scoreB === 0}
-                onClick={() => updateScore(teamB, -1)}
-                data-testid="score-b-minus"
-                className="rounded-xl bg-white/10 px-4 py-2 disabled:opacity-40"
-              >
-                -
-              </button>
-            </div>
+            {!disabled && (
+              <div className="flex justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => updateScore(teamB, 1)}
+                  data-testid="score-b-plus"
+                  className="min-h-[48px] min-w-[48px] rounded-xl bg-green-600 px-4 py-3 text-lg font-bold text-white"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  disabled={scoreB === 0}
+                  onClick={() => updateScore(teamB, -1)}
+                  data-testid="score-b-minus"
+                  className="min-h-[48px] min-w-[48px] rounded-xl bg-red-600 px-4 py-3 text-lg font-bold text-white disabled:opacity-40"
+                >
+                  -
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -305,7 +307,7 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
           disabled={disabled}
           onClick={handleSave}
           data-testid="save-game-button"
-          className="flex-1 rounded-xl bg-gray-900 px-4 py-3 text-white disabled:opacity-40"
+          className="flex-1 rounded-xl bg-green-600 px-4 py-3 text-white disabled:opacity-40"
         >
           {editingGame ? 'שמירת עדכון' : 'שמירת משחק'}
         </button>
@@ -317,7 +319,7 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
               resetForm()
             }}
             data-testid="cancel-edit-game"
-            className="rounded-xl border px-4 py-3"
+            className="rounded-xl bg-red-600 px-4 py-3 text-white disabled:opacity-40"
           >
             ביטול
           </button>
