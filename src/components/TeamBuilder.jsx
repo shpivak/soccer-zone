@@ -281,7 +281,7 @@ const TeamBuilder = ({
   const benchPlayers = players.filter((player) => !assignedPlayerIds.has(player.id))
 
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+    <div className="grid gap-3 md:grid-cols-2">
       <TeamColumn
         title="שחקנים פנויים"
         players={benchPlayers}

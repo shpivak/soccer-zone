@@ -2,7 +2,12 @@ import { expect, test } from '@playwright/test'
 import { resetTestData } from './testDataHarness'
 
 const addPlayer = async (page, name) => {
-  await page.getByTestId('new-player-input').fill(name)
+  // Open the bench add-player toggle if the input isn't already visible
+  const input = page.getByTestId('new-player-input')
+  if (!(await input.isVisible())) {
+    await page.getByTestId('bench-add-player-toggle').click()
+  }
+  await input.fill(name)
   // force: true bypasses pointer-interception from the fixed bottom nav bar
   await page.getByTestId('add-player-button').click({ force: true })
 }
@@ -58,6 +63,8 @@ test.beforeEach(async ({ page }) => {
       localStorage.clear()
       sessionStorage.setItem('soccer-zone-e2e-bootstrapped', 'true')
     }
+    // Dismiss the "What's New" popup so it doesn't block test interactions
+    localStorage.setItem('soccer-zone-whats-new-seen', '1.0.5')
   })
   await page.goto('/')
 })
