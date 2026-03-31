@@ -3,6 +3,7 @@ import soccerZoneLogo from './assets/soccer-zone-logo.jpeg'
 import { useAppContext } from './hooks/useAppContext'
 import LiveTournament from './pages/LiveTournament'
 import Stats from './pages/Stats'
+import WhatsNew from './components/WhatsNew'
 import { getLeagueTypeLabel, LEAGUE_TYPES } from './utils/leagueUtils'
 
 const ADMIN_PASSWORD = 'SoccerZone26'
@@ -96,6 +97,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-green-50">
+      <WhatsNew />
       {/* Compact sticky header — league selector */}
       <header className="sticky top-0 z-20 bg-white shadow-sm">
         <div className="mx-auto flex max-w-2xl items-center gap-3 px-3 py-2">

@@ -140,26 +140,27 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
             <div className="text-5xl font-black" data-testid="score-a-input">
               {scoreA}
             </div>
-            <div className="flex justify-center gap-2">
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => updateScore(teamA, 1)}
-                data-testid="score-a-plus"
-                className="min-h-[48px] min-w-[48px] rounded-xl bg-green-600 px-4 py-3 text-lg font-bold text-white disabled:opacity-40"
-              >
-                +
-              </button>
-              <button
-                type="button"
-                disabled={disabled || scoreA === 0}
-                onClick={() => updateScore(teamA, -1)}
-                data-testid="score-a-minus"
-                className="min-h-[48px] min-w-[48px] rounded-xl bg-red-600 px-4 py-3 text-lg font-bold text-white disabled:opacity-40"
-              >
-                -
-              </button>
-            </div>
+            {!disabled && (
+              <div className="flex justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => updateScore(teamA, 1)}
+                  data-testid="score-a-plus"
+                  className="min-h-[48px] min-w-[48px] rounded-xl bg-green-600 px-4 py-3 text-lg font-bold text-white"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  disabled={scoreA === 0}
+                  onClick={() => updateScore(teamA, -1)}
+                  data-testid="score-a-minus"
+                  className="min-h-[48px] min-w-[48px] rounded-xl bg-red-600 px-4 py-3 text-lg font-bold text-white disabled:opacity-40"
+                >
+                  -
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="space-y-3 text-center">
@@ -218,26 +219,27 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
             <div className="text-5xl font-black" data-testid="score-b-input">
               {scoreB}
             </div>
-            <div className="flex justify-center gap-2">
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => updateScore(teamB, 1)}
-                data-testid="score-b-plus"
-                className="min-h-[48px] min-w-[48px] rounded-xl bg-green-600 px-4 py-3 text-lg font-bold text-white disabled:opacity-40"
-              >
-                +
-              </button>
-              <button
-                type="button"
-                disabled={disabled || scoreB === 0}
-                onClick={() => updateScore(teamB, -1)}
-                data-testid="score-b-minus"
-                className="min-h-[48px] min-w-[48px] rounded-xl bg-red-600 px-4 py-3 text-lg font-bold text-white disabled:opacity-40"
-              >
-                -
-              </button>
-            </div>
+            {!disabled && (
+              <div className="flex justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => updateScore(teamB, 1)}
+                  data-testid="score-b-plus"
+                  className="min-h-[48px] min-w-[48px] rounded-xl bg-green-600 px-4 py-3 text-lg font-bold text-white"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  disabled={scoreB === 0}
+                  onClick={() => updateScore(teamB, -1)}
+                  data-testid="score-b-minus"
+                  className="min-h-[48px] min-w-[48px] rounded-xl bg-red-600 px-4 py-3 text-lg font-bold text-white disabled:opacity-40"
+                >
+                  -
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

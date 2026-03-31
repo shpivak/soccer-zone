@@ -141,12 +141,12 @@ const defaultDataByDataset = (dataset) => {
 export const getActiveDataset = () => DEFAULT_DATASET
 
 export const getActiveLeague = () => {
-  const leagueId = normalizeLeagueId(localStorage.getItem(ACTIVE_LEAGUE_KEY))
+  const leagueId = normalizeLeagueId(sessionStorage.getItem(ACTIVE_LEAGUE_KEY) ?? localStorage.getItem(ACTIVE_LEAGUE_KEY))
   return defaultLeagues.some((league) => league.id === leagueId) ? leagueId : DEFAULT_LEAGUE_ID
 }
 
 export const setActiveLeague = (leagueId) => {
-  localStorage.setItem(ACTIVE_LEAGUE_KEY, leagueId)
+  sessionStorage.setItem(ACTIVE_LEAGUE_KEY, leagueId)
 }
 
 const normalizeLoadedData = (dataset, data) => ({

@@ -29,11 +29,11 @@ const PlayerChip = ({ player, sourceTeamId, disabled, onTogglePlayerRole, onDele
       event.dataTransfer.setData('text/plain', JSON.stringify({ playerId: player.id, sourceTeamId }))
       event.dataTransfer.effectAllowed = 'move'
     }}
-    className="rounded-xl border bg-white p-2 text-sm shadow-sm"
+    className="w-full overflow-hidden rounded-xl border bg-white p-2 text-sm shadow-sm"
     data-testid={`player-chip-${player.id}`}
   >
-    <div className="flex items-center justify-between gap-2">
-      <div className="flex min-w-0 items-center gap-1">
+    <div className="flex min-w-0 items-center justify-between gap-1">
+      <div className="flex min-w-0 flex-1 items-center gap-1">
         {isBench && onDeletePlayer ? (
           <button
             type="button"
@@ -45,14 +45,14 @@ const PlayerChip = ({ player, sourceTeamId, disabled, onTogglePlayerRole, onDele
             ✕
           </button>
         ) : null}
-        <span className="min-w-0 flex-1 truncate">{player.name}</span>
+        <span className="min-w-0 flex-1 truncate leading-tight">{player.name}</span>
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <button
           type="button"
           disabled={disabled}
           onClick={() => onTogglePlayerRole(player.id, 'isOffense')}
-          className={`min-h-[36px] min-w-[36px] rounded-md px-2 py-1 text-xs ${player.isOffense ? 'bg-emerald-100' : 'bg-gray-100'}`}
+          className={`min-h-[32px] min-w-[32px] rounded-md px-1.5 py-1 text-xs ${player.isOffense ? 'bg-emerald-100' : 'bg-gray-100'}`}
           data-testid={`player-offense-${player.id}`}
         >
           ⚔
@@ -61,7 +61,7 @@ const PlayerChip = ({ player, sourceTeamId, disabled, onTogglePlayerRole, onDele
           type="button"
           disabled={disabled}
           onClick={() => onTogglePlayerRole(player.id, 'isDefense')}
-          className={`min-h-[36px] min-w-[36px] rounded-md px-2 py-1 text-xs ${player.isDefense ? 'bg-sky-100' : 'bg-gray-100'}`}
+          className={`min-h-[32px] min-w-[32px] rounded-md px-1.5 py-1 text-xs ${player.isDefense ? 'bg-sky-100' : 'bg-gray-100'}`}
           data-testid={`player-defense-${player.id}`}
         >
           🛡
