@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { APP_CONFIG } from '../config'
 import { getTeamDisplayName } from '../utils/leagueUtils'
 
@@ -33,26 +33,26 @@ const PlayerChip = ({ player, sourceTeamId, disabled, onTogglePlayerRole, onDele
     data-testid={`player-chip-${player.id}`}
   >
     <div className="flex items-center justify-between gap-2">
-      <div className="flex items-center gap-1 min-w-0">
+      <div className="flex min-w-0 items-center gap-1">
         {isBench && onDeletePlayer ? (
           <button
             type="button"
             disabled={disabled}
             onClick={() => onDeletePlayer(player.id)}
-            className="rounded-md px-2 py-1 text-xs bg-red-100 text-red-700 shrink-0"
+            className="min-h-[36px] min-w-[36px] shrink-0 rounded-md bg-red-100 px-2 py-1 text-xs text-red-700"
             data-testid={`player-delete-${player.id}`}
           >
             ✕
           </button>
         ) : null}
-        <span className="truncate">{player.name}</span>
+        <span className="min-w-0 flex-1 truncate">{player.name}</span>
       </div>
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex shrink-0 items-center gap-1">
         <button
           type="button"
           disabled={disabled}
           onClick={() => onTogglePlayerRole(player.id, 'isOffense')}
-          className={`rounded-md px-2 py-1 text-xs ${player.isOffense ? 'bg-emerald-100' : 'bg-gray-100'}`}
+          className={`min-h-[36px] min-w-[36px] rounded-md px-2 py-1 text-xs ${player.isOffense ? 'bg-emerald-100' : 'bg-gray-100'}`}
           data-testid={`player-offense-${player.id}`}
         >
           ⚔
@@ -61,7 +61,7 @@ const PlayerChip = ({ player, sourceTeamId, disabled, onTogglePlayerRole, onDele
           type="button"
           disabled={disabled}
           onClick={() => onTogglePlayerRole(player.id, 'isDefense')}
-          className={`rounded-md px-2 py-1 text-xs ${player.isDefense ? 'bg-sky-100' : 'bg-gray-100'}`}
+          className={`min-h-[36px] min-w-[36px] rounded-md px-2 py-1 text-xs ${player.isDefense ? 'bg-sky-100' : 'bg-gray-100'}`}
           data-testid={`player-defense-${player.id}`}
         >
           🛡
@@ -71,17 +71,113 @@ const PlayerChip = ({ player, sourceTeamId, disabled, onTogglePlayerRole, onDele
   </div>
 )
 
+const BenchAddRow = ({ onAddPlayer }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const [name, setName] = useState('')
+  const handleAdd = () => {
+    if (!name.trim()) return
+    onAddPlayer(name.trim(), null)
+    setName('')
+    setIsOpen(false)
+  }
+  if (!isOpen) {
+    return (
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        className="mt-2 min-h-[40px] w-full rounded-xl border border-dashed py-2 text-sm text-gray-400 hover:border-gray-400 hover:text-gray-600"
+        data-testid="bench-add-player-toggle"
+      >
+        +
+      </button>
+    )
+  }
+  return (
+    <div className="mt-2 flex gap-2">
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handleAdd()
+          if (e.key === 'Escape') setIsOpen(false)
+        }}
+        data-testid="new-player-input"
+        placeholder="הקלד שם שחקן חדש"
+        className="min-h-[44px] flex-1 rounded-xl border px-3 py-2 text-sm"
+      />
+      <button
+        onClick={handleAdd}
+        disabled={!name.trim()}
+        data-testid="add-player-button"
+        className={`min-h-[44px] rounded-xl px-4 py-2 text-sm text-white transition-colors ${name.trim() ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-300'}`}
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
+const TeamAddRow = ({ team, onAddPlayer }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const [name, setName] = useState('')
+  const handleAdd = () => {
+    if (!name.trim()) return
+    onAddPlayer(name.trim(), team.id)
+    setName('')
+    setIsOpen(false)
+  }
+  if (!isOpen) {
+    return (
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        className="mt-2 min-h-[40px] w-full rounded-xl border border-dashed py-2 text-sm text-gray-400 hover:border-gray-400 hover:text-gray-600"
+        data-testid={`team-add-player-toggle-${team.id}`}
+      >
+        +
+      </button>
+    )
+  }
+  return (
+    <div className="mt-2 flex gap-2">
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handleAdd()
+          if (e.key === 'Escape') setIsOpen(false)
+        }}
+        data-testid={`team-player-input-${team.id}`}
+        placeholder="שם שחקן"
+        className="min-h-[44px] flex-1 rounded-xl border px-3 py-2 text-sm"
+      />
+      <button
+        onClick={handleAdd}
+        disabled={!name.trim()}
+        data-testid={`team-add-player-button-${team.id}`}
+        className={`min-h-[44px] rounded-xl px-3 py-2 text-sm text-white transition-colors ${name.trim() ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-300'}`}
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
 const TeamColumn = ({
   title,
   team,
   players,
   maxPlayersPerTeam,
   disabled,
+  adminMode,
   onChangeTeamColor,
   onChangeTeamName,
   onDropPlayer,
   onTogglePlayerRole,
   onDeletePlayer,
+  onAddPlayer,
   allowColorEdit,
   allowNameEdit,
   isBench = false,
@@ -95,7 +191,7 @@ const TeamColumn = ({
       const payload = JSON.parse(raw)
       onDropPlayer(payload.playerId, team?.id ?? null)
     }}
-    className={`rounded-xl border p-3 ${isBench ? 'bg-white' : colorClass[team.color] ?? 'bg-gray-50 border-gray-300'}`}
+    className={`rounded-xl border p-3 ${isBench ? 'bg-white' : (colorClass[team.color] ?? 'bg-gray-50 border-gray-300')}`}
     data-testid={team ? `team-card-${team.id}` : 'team-card-bench'}
   >
     <div className="mb-3 flex items-center justify-between gap-2">
@@ -114,7 +210,7 @@ const TeamColumn = ({
       {!isBench && team && maxPlayersPerTeam ? (
         <span
           data-testid={`team-player-count-${team.id}`}
-          className={`text-xs font-medium px-2 py-0.5 rounded-full ${players.length >= maxPlayersPerTeam ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}
+          className={`rounded-full px-2 py-0.5 text-xs font-medium ${players.length >= maxPlayersPerTeam ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}
         >
           {players.length}/{maxPlayersPerTeam}
         </span>
@@ -149,6 +245,9 @@ const TeamColumn = ({
       ))}
       {players.length === 0 ? <p className="text-xs text-gray-500">גרור לכאן שחקנים</p> : null}
     </div>
+    {/* Inline add player */}
+    {adminMode && isBench ? <BenchAddRow onAddPlayer={onAddPlayer} /> : null}
+    {adminMode && !isBench && team ? <TeamAddRow team={team} onAddPlayer={onAddPlayer} /> : null}
   </div>
 )
 
@@ -157,12 +256,13 @@ const TeamBuilder = ({
   players,
   maxPlayersPerTeam,
   disabled,
+  adminMode,
   onMovePlayer,
   onChangeTeamColor,
   onChangeTeamName,
   onTogglePlayerRole,
   onDeletePlayer,
-  message,
+  onAddPlayer,
   allowColorEdit = true,
   allowNameEdit = false,
 }) => {
@@ -171,9 +271,7 @@ const TeamBuilder = ({
     teams.forEach((team) => {
       map.set(
         team.id,
-        team.players
-          .map((playerId) => players.find((player) => player.id === playerId))
-          .filter(Boolean),
+        team.players.map((playerId) => players.find((player) => player.id === playerId)).filter(Boolean),
       )
     })
     return map
@@ -183,43 +281,39 @@ const TeamBuilder = ({
   const benchPlayers = players.filter((player) => !assignedPlayerIds.has(player.id))
 
   return (
-    <section className="rounded-2xl bg-white p-4 shadow-sm">
-      <h2 className="mb-3 text-lg font-bold">בניית קבוצות</h2>
-      {message ? (
-        <p data-testid="team-builder-message" className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">
-          {message}
-        </p>
-      ) : null}
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <TeamColumn
+        title="שחקנים פנויים"
+        players={benchPlayers}
+        disabled={disabled}
+        adminMode={adminMode}
+        onDropPlayer={onMovePlayer}
+        onTogglePlayerRole={onTogglePlayerRole}
+        onDeletePlayer={onDeletePlayer}
+        onAddPlayer={onAddPlayer ?? (() => {})}
+        allowColorEdit={false}
+        allowNameEdit={false}
+        isBench
+      />
+      {teams.map((team) => (
         <TeamColumn
-          title="שחקנים פנויים"
-          players={benchPlayers}
+          key={team.id}
+          title={getTeamDisplayName(team)}
+          team={team}
+          players={playersByTeamId.get(team.id) ?? []}
+          maxPlayersPerTeam={maxPlayersPerTeam}
           disabled={disabled}
+          adminMode={adminMode}
+          onChangeTeamColor={onChangeTeamColor}
+          onChangeTeamName={onChangeTeamName}
           onDropPlayer={onMovePlayer}
           onTogglePlayerRole={onTogglePlayerRole}
-          onDeletePlayer={onDeletePlayer}
-          allowColorEdit={false}
-          allowNameEdit={false}
-          isBench
+          onAddPlayer={onAddPlayer ?? (() => {})}
+          allowColorEdit={allowColorEdit}
+          allowNameEdit={allowNameEdit}
         />
-        {teams.map((team) => (
-          <TeamColumn
-            key={team.id}
-            title={getTeamDisplayName(team)}
-            team={team}
-            players={playersByTeamId.get(team.id) ?? []}
-            maxPlayersPerTeam={maxPlayersPerTeam}
-            disabled={disabled}
-            onChangeTeamColor={onChangeTeamColor}
-            onChangeTeamName={onChangeTeamName}
-            onDropPlayer={onMovePlayer}
-            onTogglePlayerRole={onTogglePlayerRole}
-            allowColorEdit={allowColorEdit}
-            allowNameEdit={allowNameEdit}
-          />
-        ))}
-      </div>
-    </section>
+      ))}
+    </div>
   )
 }
 

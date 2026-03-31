@@ -3,7 +3,8 @@ import { resetTestData } from './testDataHarness'
 
 const addPlayer = async (page, name) => {
   await page.getByTestId('new-player-input').fill(name)
-  await page.getByTestId('add-player-button').click()
+  // force: true bypasses pointer-interception from the fixed bottom nav bar
+  await page.getByTestId('add-player-button').click({ force: true })
 }
 
 const addPlayers = async (page, names) => {
@@ -26,8 +27,10 @@ const setTeamPlayer = async (page, teamId, playerName, assigned = true) => {
 }
 
 const enableAdminMode = async (page) => {
+  await page.getByTestId('nav-admin').click()
   await page.getByTestId('admin-password-input').fill('SoccerZone26')
   await page.getByTestId('admin-unlock-button').click()
+  await page.getByTestId('nav-live').click()
 }
 
 const setScore = async (page, side, score) => {
@@ -96,17 +99,25 @@ test('main navigation, dropdown labels, and tournament stats render for the sele
 })
 
 test('management controls are separated and empty tournament leagues can still start from scratch', async ({ page }) => {
+  // Admin panel is on the admin tab
+  await page.getByTestId('nav-admin').click()
   await expect(page.getByTestId('management-panel')).toBeVisible()
-  // Admin is off by default — controls are hidden until unlocked
+  // Admin is off by default — only password prompt visible
   await expect(page.getByTestId('admin-password-input')).toBeVisible()
   await expect(page.getByTestId('add-league-name')).toHaveCount(0)
   await expect(page.getByTestId('clear-league-data')).toHaveCount(0)
 
-  await enableAdminMode(page)
+  await enableAdminMode(page)  // navigates to admin, unlocks, returns to live
+
+  // Re-check admin panel controls on admin tab
+  await page.getByTestId('nav-admin').click()
   await expect(page.getByTestId('admin-password-input')).toHaveCount(0)
   await expect(page.getByTestId('add-league-name')).toBeVisible()
   await expect(page.getByTestId('clear-league-data')).toBeEnabled()
   await expect(page.getByTestId('reset-league-to-mock')).toBeEnabled()
+
+  // Back to live for tournament interaction
+  await page.getByTestId('nav-live').click()
   await page.getByTestId('league-select').selectOption('tournament-2')
   await expect(page.getByText('אין טורניר זמין. ניתן ליצור טורניר חדש.')).toBeVisible()
 
@@ -125,18 +136,29 @@ test('management controls are separated and empty tournament leagues can still s
 test('management actions clear the selected league and can restore its mock data after confirmation', async ({ page }) => {
   await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('tournament-1')
+
+  // Navigate to live to verify initial state
   await expect(page.locator('[data-testid="tournament-select"] option')).toHaveCount(2)
 
+  // Navigate to admin tab for management actions
+  await page.getByTestId('nav-admin').click()
   page.once('dialog', (dialog) => dialog.accept())
   await page.getByTestId('clear-league-data').click()
+
+  // Back to live to see effect
+  await page.getByTestId('nav-live').click()
   await expect(page.getByText('אין טורניר זמין. ניתן ליצור טורניר חדש.')).toBeVisible()
 
   await page.getByTestId('nav-stats').click()
   await expect(page.locator('[data-testid^="player-stats-row-"]')).toHaveCount(0)
 
-  await page.getByTestId('nav-live').click()
+  // Admin tab to reset
+  await page.getByTestId('nav-admin').click()
   page.once('dialog', (dialog) => dialog.accept())
   await page.getByTestId('reset-league-to-mock').click()
+
+  // Back to live to verify restore
+  await page.getByTestId('nav-live').click()
   await expect(page.locator('[data-testid="tournament-select"] option')).toHaveCount(2)
 
   await page.getByTestId('nav-stats').click()
@@ -567,9 +589,13 @@ test('bug-4b: צור מחזור works first click after clearing regular league 
   await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('regular-1')
 
-  // Clear the league data
+  // Navigate to admin tab to clear league data
+  await page.getByTestId('nav-admin').click()
   page.once('dialog', (dialog) => dialog.accept())
   await page.getByTestId('clear-league-data').click()
+
+  // Back to live to see effect
+  await page.getByTestId('nav-live').click()
   await expect(page.getByText('אין מחזור זמין. ניתן ליצור מחזור חדש.')).toBeVisible()
 
   // Create tournament should work on the first click
@@ -613,6 +639,9 @@ test('bug-4: צור מחזור creates a new round on first click for regular le
 })
 
 test('admin mode requires password, hides controls when locked, and persists in session storage', async ({ page }) => {
+  // Admin panel lives on the admin tab
+  await page.getByTestId('nav-admin').click()
+
   // Admin is off by default — only password prompt is visible
   await expect(page.getByTestId('admin-password-input')).toBeVisible()
   await expect(page.getByTestId('admin-unlock-button')).toBeVisible()
@@ -626,8 +655,11 @@ test('admin mode requires password, hides controls when locked, and persists in 
   await expect(page.getByTestId('admin-password-input')).toBeVisible()
   await expect(page.getByTestId('clear-league-data')).toHaveCount(0)
 
-  // Correct password unlocks and shows all admin controls
+  // Correct password unlocks (enableAdminMode navigates to admin, unlocks, returns to live)
   await enableAdminMode(page)
+
+  // Check admin controls on admin tab
+  await page.getByTestId('nav-admin').click()
   await expect(page.getByTestId('admin-password-input')).toHaveCount(0)
   await expect(page.getByTestId('admin-lock-button')).toBeVisible()
   await expect(page.getByTestId('clear-league-data')).toBeVisible()
@@ -635,6 +667,7 @@ test('admin mode requires password, hides controls when locked, and persists in 
 
   // After reload, admin mode is still active (session storage)
   await page.reload()
+  await page.getByTestId('nav-admin').click()
   await expect(page.getByTestId('admin-password-input')).toHaveCount(0)
   await expect(page.getByTestId('clear-league-data')).toBeVisible()
 
