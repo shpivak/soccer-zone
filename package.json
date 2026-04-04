@@ -1,7 +1,7 @@
 {
   "name": "soccer-zone",
   "private": true,
-  "version": "1.0.5",
+  "version": "1.0.6",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test:e2e": "VITE_DEFAULT_DATASET=test playwright test",
+    "db:backup:dev": "node scripts/dev-db/backup-dev-db.mjs",
     "db:seed:dev": "SUPABASE_TARGET_DATASET=dev node scripts/migrate-mock-data-to-supabase.mjs",
     "db:reset:dev": "ALLOW_DEV_DB_RESET=true SUPABASE_TARGET_DATASET=dev SEED_AFTER_RESET=false node scripts/reset-supabase-dataset.mjs",
     "db:seed:test": "SUPABASE_TARGET_DATASET=test node scripts/migrate-mock-data-to-supabase.mjs",

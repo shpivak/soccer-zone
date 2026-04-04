@@ -8,12 +8,29 @@ const splitToDefaultTeams = (playerIds) => [
   playerIds.slice(12, 18),
 ]
 
-const createSessionTeams = (league, players) => {
+const cloneTeams = (teams = []) =>
+  teams.map((team) => ({
+    ...team,
+    players: Array.isArray(team.players) ? [...team.players] : [],
+  }))
+
+const getRegularLeagueBaseTeams = (league, sessions) => {
+  const firstSessionWithTeams = [...(sessions ?? [])]
+    .filter((session) => Array.isArray(session.teams) && session.teams.length > 0)
+    .sort(
+      (a, b) =>
+        (a.leagueNumber ?? Number.MAX_SAFE_INTEGER) - (b.leagueNumber ?? Number.MAX_SAFE_INTEGER) ||
+        String(a.date ?? '').localeCompare(String(b.date ?? '')) ||
+        String(a.id ?? '').localeCompare(String(b.id ?? '')),
+    )[0]
+
+  if (firstSessionWithTeams) return cloneTeams(firstSessionWithTeams.teams)
+  return cloneTeams(league?.teams ?? [])
+}
+
+const createSessionTeams = (league, players, sessions = []) => {
   if (league?.type === LEAGUE_TYPES.regular) {
-    return (league.teams ?? []).map((team) => ({
-      ...team,
-      players: Array.isArray(team.players) ? [...team.players] : [],
-    }))
+    return getRegularLeagueBaseTeams(league, sessions)
   }
 
   const playerIds = players.map((player) => player.id)
@@ -29,14 +46,14 @@ const createSessionTeams = (league, players) => {
 
 const createEmptySession = (id, date, players, league, sessions) => {
   const year = new Date().getFullYear()
-  const leagueNumber = sessions.length + 1
+  const leagueNumber = sessions.reduce((max, session) => Math.max(max, session.leagueNumber ?? 0), 0) + 1
   return {
     id,
     date,
     leagueNumber,
     leagueId: league.id,
     year,
-    teams: createSessionTeams(league, players),
+    teams: createSessionTeams(league, players, sessions),
     games: [],
   }
 }

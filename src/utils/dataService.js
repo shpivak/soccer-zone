@@ -150,9 +150,34 @@ export const setActiveLeague = (leagueId) => {
 }
 
 const normalizeLoadedData = (dataset, data) => ({
-  leagues: data.leagues.map(migrateLeague),
-  players: data.players.map(migratePlayer),
-  tournaments: data.tournaments.map(migrateTournament),
+  ...(() => {
+    const leagues = data.leagues.map(migrateLeague)
+    const players = data.players.map(migratePlayer)
+    const tournaments = data.tournaments.map(migrateTournament)
+    const regularLeagues = leagues.filter(
+      (league) => league.type === LEAGUE_TYPES.regular && league.allowRosterEdits !== true,
+    )
+
+    for (const league of regularLeagues) {
+      const relatedTournaments = tournaments
+        .filter((tournament) => tournament.leagueId === league.id)
+        .sort(
+          (a, b) =>
+            (a.leagueNumber ?? Number.MAX_SAFE_INTEGER) - (b.leagueNumber ?? Number.MAX_SAFE_INTEGER) ||
+            (a.date ?? '').localeCompare(b.date ?? '') ||
+            a.id.localeCompare(b.id),
+        )
+      const baseTeamsSource = relatedTournaments.find((tournament) => (tournament.teams?.length ?? 0) > 0)?.teams ?? league.teams
+      const baseTeams = clone(baseTeamsSource ?? [])
+
+      league.teams = clone(baseTeams)
+      for (const tournament of relatedTournaments) {
+        tournament.teams = clone(baseTeams)
+      }
+    }
+
+    return { leagues, players, tournaments }
+  })(),
 })
 
 const loadDatasetDataFromLocal = (dataset) => {
@@ -189,17 +214,6 @@ const loadDatasetDataFromLocal = (dataset) => {
   })
 }
 
-const loadPendingDatasetData = (dataset) => {
-  const resolvedDataset = resolveDataset(dataset)
-  const { leaguesKey, playersKey, tournamentsKey } = getPendingStorageKeys(resolvedDataset)
-
-  return {
-    leagues: localStorage.getItem(leaguesKey),
-    players: localStorage.getItem(playersKey),
-    tournaments: localStorage.getItem(tournamentsKey),
-  }
-}
-
 const savePendingLeagues = (dataset, leagues) => {
   const { leaguesKey } = getPendingStorageKeys(resolveDataset(dataset))
   localStorage.setItem(leaguesKey, JSON.stringify(leagues))
@@ -230,17 +244,21 @@ const clearPendingTournaments = (dataset) => {
   localStorage.removeItem(tournamentsKey)
 }
 
+const clearPendingDatasetData = (dataset) => {
+  clearPendingLeagues(dataset)
+  clearPendingPlayers(dataset)
+  clearPendingTournaments(dataset)
+}
+
 export const loadDatasetData = async (dataset) => {
   const resolvedDataset = resolveDataset(dataset)
   if (isSupabaseConfigured()) {
     const data = await loadDatasetFromSupabase(resolvedDataset)
-    const pending = loadPendingDatasetData(resolvedDataset)
-
-    return normalizeLoadedData(resolvedDataset, {
-      leagues: pending.leagues ? safeParse(pending.leagues, data.leagues) : data.leagues,
-      players: pending.players ? safeParse(pending.players, data.players) : data.players,
-      tournaments: pending.tournaments ? safeParse(pending.tournaments, data.tournaments) : data.tournaments,
-    })
+    // Never hydrate Supabase-backed state from stale browser-local pending snapshots.
+    // Those snapshots can lag behind the live DB and would be immediately saved back,
+    // deleting newer rows from the remote dataset on app startup.
+    clearPendingDatasetData(resolvedDataset)
+    return normalizeLoadedData(resolvedDataset, data)
   }
 
   return loadDatasetDataFromLocal(resolvedDataset)
@@ -307,9 +325,7 @@ export const resetDatasetData = async (dataset) => {
 
   if (isSupabaseConfigured()) {
     await resetSupabaseDataset(resolvedDataset)
-    clearPendingLeagues(resolvedDataset)
-    clearPendingPlayers(resolvedDataset)
-    clearPendingTournaments(resolvedDataset)
+    clearPendingDatasetData(resolvedDataset)
     return
   }
 
