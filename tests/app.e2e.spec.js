@@ -70,7 +70,7 @@ test.beforeEach(async ({ page }) => {
       sessionStorage.setItem('soccer-zone-e2e-bootstrapped', 'true')
     }
     // Dismiss the "What's New" popup so it doesn't block test interactions
-    localStorage.setItem('soccer-zone-whats-new-seen', '1.0.6')
+    localStorage.setItem('soccer-zone-whats-new-seen', '1.0.7')
   })
   await page.goto('/')
   // Dismiss What's New modal if it shows (guards against dev-server version cache mismatch)
