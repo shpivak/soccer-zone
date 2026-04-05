@@ -4,7 +4,9 @@ import { useAppContext } from './hooks/useAppContext'
 import LiveTournament from './pages/LiveTournament'
 import Stats from './pages/Stats'
 import WhatsNew from './components/WhatsNew'
+import NotificationsPanel from './components/NotificationsPanel'
 import { getLeagueTypeLabel, LEAGUE_TYPES } from './utils/leagueUtils'
+import { generateTeamShareMessage } from './utils/shareUtils'
 
 const ADMIN_PASSWORD = 'SoccerZone26'
 const ADMIN_SESSION_KEY = 'soccer-zone-admin-auth'
@@ -43,6 +45,8 @@ function App() {
     isResetEnabled,
     clearActiveLeagueData,
     leagues,
+    players,
+    tournaments,
     resetActiveLeagueToMockData,
     createLeague,
     setActiveLeagueId,
@@ -60,6 +64,18 @@ function App() {
     () => leagues.find((league) => league.id === activeLeagueId) ?? null,
     [activeLeagueId, leagues],
   )
+
+  const leaguePlayers = useMemo(
+    () => players.filter((p) => p.leagueId === activeLeagueId),
+    [players, activeLeagueId],
+  )
+
+  const latestTeamsShareMsg = useMemo(() => {
+    const leagueTournaments = tournaments.filter((t) => t.leagueId === activeLeagueId)
+    const latest = leagueTournaments[leagueTournaments.length - 1] ?? null
+    if (!latest || !activeLeague) return ''
+    return generateTeamShareMessage(latest, leaguePlayers, activeLeague.name, activeLeague)
+  }, [tournaments, activeLeagueId, leaguePlayers, activeLeague])
 
   useEffect(() => {
     if (leagues.length === 0) return
@@ -259,6 +275,11 @@ function App() {
                     </div>
                   </div>
                 ) : null}
+
+                <NotificationsPanel
+                  leagueName={activeLeague?.name ?? ''}
+                  teamsMsg={latestTeamsShareMsg}
+                />
               </>
             ) : (
               <div className="mt-3 flex flex-wrap items-center gap-2">
