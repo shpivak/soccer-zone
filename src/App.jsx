@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import soccerZoneLogo from './assets/soccer-zone-logo.jpeg'
 import { useAppContext } from './hooks/useAppContext'
 import LiveTournament from './pages/LiveTournament'
@@ -22,6 +22,18 @@ const NavTab = ({ icon, label, active, onClick, testId }) => (
   </button>
 )
 
+const getLeagueIdFromUrl = () => {
+  if (typeof window === 'undefined') return ''
+  return new URLSearchParams(window.location.search).get('league') ?? ''
+}
+
+const syncLeagueIdToUrl = (leagueId) => {
+  if (typeof window === 'undefined' || !leagueId) return
+  const url = new URL(window.location.href)
+  url.searchParams.set('league', leagueId)
+  window.history.replaceState({}, '', url)
+}
+
 function App() {
   const {
     activeDataset,
@@ -42,11 +54,29 @@ function App() {
   const [adminPasswordError, setAdminPasswordError] = useState(false)
   const [newLeagueName, setNewLeagueName] = useState('')
   const [newLeagueType, setNewLeagueType] = useState(LEAGUE_TYPES.tournament)
+  const didHydrateLeagueFromUrlRef = useRef(false)
 
   const activeLeague = useMemo(
     () => leagues.find((league) => league.id === activeLeagueId) ?? null,
     [activeLeagueId, leagues],
   )
+
+  useEffect(() => {
+    if (leagues.length === 0) return
+    if (didHydrateLeagueFromUrlRef.current) return
+    const leagueIdFromUrl = getLeagueIdFromUrl()
+    if (leagueIdFromUrl && leagues.some((league) => league.id === leagueIdFromUrl) && leagueIdFromUrl !== activeLeagueId) {
+      setActiveLeagueId(leagueIdFromUrl)
+      return
+    }
+    didHydrateLeagueFromUrlRef.current = true
+  }, [activeLeagueId, leagues, setActiveLeagueId])
+
+  useEffect(() => {
+    if (leagues.length === 0) return
+    if (!didHydrateLeagueFromUrlRef.current) return
+    syncLeagueIdToUrl(activeLeagueId)
+  }, [activeLeagueId, leagues])
 
   const handleAdminUnlock = () => {
     if (adminPasswordInput === ADMIN_PASSWORD) {

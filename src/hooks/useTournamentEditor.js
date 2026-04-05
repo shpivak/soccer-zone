@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { APP_CONFIG } from '../config'
 import { LEAGUE_TYPES } from '../utils/leagueUtils'
 
@@ -49,6 +49,7 @@ const createEmptySession = (id, date, players, league, sessions) => {
   const leagueNumber = sessions.reduce((max, session) => Math.max(max, session.leagueNumber ?? 0), 0) + 1
   return {
     id,
+    name: '',
     date,
     leagueNumber,
     leagueId: league.id,
@@ -58,10 +59,33 @@ const createEmptySession = (id, date, players, league, sessions) => {
   }
 }
 
+const getTournamentIdFromUrl = () => {
+  if (typeof window === 'undefined') return ''
+  return new URLSearchParams(window.location.search).get('tournament') ?? ''
+}
+
+const syncUrlSelection = (leagueId, tournamentId = '') => {
+  if (typeof window === 'undefined' || !leagueId) return
+  const url = new URL(window.location.href)
+  url.searchParams.set('league', leagueId)
+  if (tournamentId) {
+    url.searchParams.set('tournament', tournamentId)
+  } else {
+    url.searchParams.delete('tournament')
+  }
+  window.history.replaceState({}, '', url)
+}
+
 export const useTournamentEditor = (sessions, players, league) => {
-  const [selectedTournamentId, setSelectedTournamentId] = useState(sessions[0]?.id ?? '')
+  const [selectedTournamentId, setSelectedTournamentId] = useState(() => getTournamentIdFromUrl() || sessions[0]?.id || '')
+  const tournamentIdFromUrl = getTournamentIdFromUrl()
   const hasSelection = sessions.some((item) => item.id === selectedTournamentId)
-  const resolvedTournamentId = hasSelection ? selectedTournamentId : (sessions[0]?.id ?? '')
+  const hasUrlSelection = sessions.some((item) => item.id === tournamentIdFromUrl)
+  const resolvedTournamentId = hasSelection
+    ? selectedTournamentId
+    : hasUrlSelection
+      ? tournamentIdFromUrl
+      : (sessions[0]?.id ?? '')
 
   const selectedTournament = useMemo(
     () => sessions.find((item) => item.id === resolvedTournamentId) ?? null,
@@ -73,6 +97,11 @@ export const useTournamentEditor = (sessions, players, league) => {
     const today = new Date().toISOString().slice(0, 10)
     return createEmptySession(nextId, today, players, league, sessions)
   }
+
+  useEffect(() => {
+    if (!league?.id) return
+    syncUrlSelection(league.id, resolvedTournamentId)
+  }, [league?.id, resolvedTournamentId])
 
   return {
     selectedTournamentId: resolvedTournamentId,

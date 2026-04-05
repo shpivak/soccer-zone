@@ -22,7 +22,16 @@ const colorClass = {
   white: 'bg-white border-gray-300',
 }
 
-const PlayerChip = ({ player, sourceTeamId, disabled, onTogglePlayerRole, onDeletePlayer, isBench }) => (
+const PlayerChip = ({
+  player,
+  sourceTeamId,
+  disabled,
+  onTogglePlayerRole,
+  onDeletePlayer,
+  onRenamePlayer,
+  allowNameEdit,
+  isBench,
+}) => (
   <div
     draggable={!disabled}
     onDragStart={(event) => {
@@ -45,7 +54,20 @@ const PlayerChip = ({ player, sourceTeamId, disabled, onTogglePlayerRole, onDele
             ✕
           </button>
         ) : null}
-        <span className="min-w-0 flex-1 truncate leading-tight">{player.name}</span>
+        {allowNameEdit ? (
+          <>
+            <span className="sr-only">{player.name}</span>
+            <input
+              value={player.name}
+              disabled={!onRenamePlayer}
+              onChange={(event) => onRenamePlayer?.(player.id, event.target.value)}
+              className="min-w-0 flex-1 rounded-md border px-2 py-1 text-sm"
+              data-testid={`player-name-input-${player.id}`}
+            />
+          </>
+        ) : (
+          <span className="min-w-0 flex-1 truncate leading-tight">{player.name}</span>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <button
@@ -177,9 +199,11 @@ const TeamColumn = ({
   onDropPlayer,
   onTogglePlayerRole,
   onDeletePlayer,
+  onRenamePlayer,
   onAddPlayer,
   allowColorEdit,
   allowNameEdit,
+  allowPlayerNameEdit,
   isBench = false,
 }) => (
   <div
@@ -240,6 +264,8 @@ const TeamColumn = ({
           disabled={disabled}
           onTogglePlayerRole={onTogglePlayerRole}
           onDeletePlayer={onDeletePlayer}
+          onRenamePlayer={onRenamePlayer}
+          allowNameEdit={allowPlayerNameEdit}
           isBench={isBench}
         />
       ))}
@@ -262,9 +288,11 @@ const TeamBuilder = ({
   onChangeTeamName,
   onTogglePlayerRole,
   onDeletePlayer,
+  onRenamePlayer,
   onAddPlayer,
   allowColorEdit = true,
   allowNameEdit = false,
+  allowPlayerNameEdit = false,
 }) => {
   const playersByTeamId = useMemo(() => {
     const map = new Map()
@@ -290,9 +318,11 @@ const TeamBuilder = ({
         onDropPlayer={onMovePlayer}
         onTogglePlayerRole={onTogglePlayerRole}
         onDeletePlayer={onDeletePlayer}
+        onRenamePlayer={onRenamePlayer}
         onAddPlayer={onAddPlayer ?? (() => {})}
         allowColorEdit={false}
         allowNameEdit={false}
+        allowPlayerNameEdit={allowPlayerNameEdit}
         isBench
       />
       {teams.map((team) => (
@@ -308,9 +338,11 @@ const TeamBuilder = ({
           onChangeTeamName={onChangeTeamName}
           onDropPlayer={onMovePlayer}
           onTogglePlayerRole={onTogglePlayerRole}
+          onRenamePlayer={onRenamePlayer}
           onAddPlayer={onAddPlayer ?? (() => {})}
           allowColorEdit={allowColorEdit}
           allowNameEdit={allowNameEdit}
+          allowPlayerNameEdit={allowPlayerNameEdit}
         />
       ))}
     </div>
