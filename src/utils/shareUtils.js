@@ -1,4 +1,4 @@
-import { getSessionDisplayName, getTeamColorLabel, getTeamDisplayName } from './leagueUtils'
+import { getSessionDisplayName, getTeamColorLabel, getTeamDisplayName, LEAGUE_TYPES } from './leagueUtils'
 
 const getPlayerName = (playerId, players) => players.find((p) => p.id === playerId)?.name ?? ''
 const appendShareLink = (message, shareUrl) => (shareUrl ? `${message}\n\n🔗 ${shareUrl}` : message)
@@ -6,11 +6,11 @@ const appendShareLink = (message, shareUrl) => (shareUrl ? `${message}\n\n🔗 $
 const colorEmoji = {
   black: '⚫',
   yellow: '🟡',
-  pink: '🩷',
+  pink: '🟣',
   orange: '🟠',
   blue: '🔵',
-  gray: '⚪',
-  white: '⬜',
+  white: '⚪',
+  gray: '⬜',
 }
 
 const rankEmoji = (rank) => {
@@ -82,9 +82,11 @@ export const generateTeamShareMessage = (tournament, players, leagueName, league
         .join('\n')
 
       const displayName = getTeamDisplayName(team)
-      const colorLbl = getTeamColorLabel(team.color)
-      const emoji = colorEmoji[team.color] ?? '🟢'
-      const teamHeader = displayName === colorLbl ? `${emoji} ${displayName}` : `${emoji} ${displayName} (${colorLbl})`
+      // Regular league: teams have custom names — show as-is; tournament/friendly: prefix with color emoji
+      const teamHeader =
+        league?.type === LEAGUE_TYPES.regular
+          ? displayName
+          : `${colorEmoji[team.color] ?? '🟢'} ${displayName}`
       return `${teamHeader}\n${playerLines}`
     })
     .join('\n\n')

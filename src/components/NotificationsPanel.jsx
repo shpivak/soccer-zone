@@ -1,28 +1,25 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { shareViaWhatsApp } from '../utils/shareUtils'
 import { getTeamDisplayName } from '../utils/leagueUtils'
 
-// Maps a color key to a circle emoji — mirrors the map in shareUtils
+const WEEKLY_REMINDER_KEY = 'soccer-zone-weekly-reminder'
+
 const colorEmoji = {
-  black: '⚫', yellow: '🟡', pink: '🩷', orange: '🟠',
-  blue: '🔵', gray: '⚪', white: '⬜',
+  black: '⚫', yellow: '🟡', pink: '🟣', orange: '🟠',
+  blue: '🔵', gray: '⚪', white: '⚪',
 }
 
-// Returns the Unicode clock face emoji for a given hour (0-23) and minute
 const getClockEmoji = (hour, min) => {
   const h = hour % 12 || 12
   return min >= 30
-    ? String.fromCodePoint(0x1F55B + h) // 🕜 – 🕧 (half hours)
-    : String.fromCodePoint(0x1F54F + h) // 🕐 – 🕛 (whole hours)
+    ? String.fromCodePoint(0x1F55B + h) // 🕜 – 🕧
+    : String.fromCodePoint(0x1F54F + h) // 🕐 – 🕛
 }
 
-// Formats a minute-offset into HH:MM, wrapping past midnight
 const addMinutes = (baseTime, offsetMinutes) => {
   const [h, m] = baseTime.split(':').map(Number)
   const total = h * 60 + m + offsetMinutes
-  const hh = String(Math.floor(total / 60) % 24).padStart(2, '0')
-  const mm = String(total % 60).padStart(2, '0')
-  return `${hh}:${mm}`
+  return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
 const generateFixturesMessage = (teams, leagueName, startTime = '18:00') => {
@@ -30,12 +27,11 @@ const generateFixturesMessage = (teams, leagueName, startTime = '18:00') => {
   for (let i = 0; i + 1 < teams.length; i += 2) {
     const timeStr = addMinutes(startTime, Math.floor(i / 2) * 90)
     const [hh, mm] = timeStr.split(':').map(Number)
-    const clock = getClockEmoji(hh, mm)
     const t1 = teams[i]
     const t2 = teams[i + 1]
-    const e1 = colorEmoji[t1.color] ?? '⚽'
-    const e2 = colorEmoji[t2.color] ?? '⚽'
-    slots.push(`${clock} ${timeStr} – ${e1} ${getTeamDisplayName(t1)} & ${e2} ${getTeamDisplayName(t2)}`)
+    slots.push(
+      `${getClockEmoji(hh, mm)} ${timeStr} – ${colorEmoji[t1.color] ?? '⚽'} ${getTeamDisplayName(t1)} & ${colorEmoji[t2.color] ?? '⚽'} ${getTeamDisplayName(t2)}`,
+    )
   }
   return `📋 *${leagueName}*\n${slots.join('\n') || '[אין מספיק קבוצות]'}`
 }
@@ -82,24 +78,29 @@ const getTemplates = (leagueName, teamsMsg, teams) => [
   },
 ]
 
-const requestAndShowNotification = async (message) => {
-  if (!('Notification' in window)) {
-    alert('הדפדפן שלך לא תומך בהתראות')
-    return false
+// Recursive weekly scheduler — returns a cancel function
+const scheduleWeekly = (time, message) => {
+  let cancelled = false
+  let timer
+  const schedule = () => {
+    const [h, m] = time.split(':').map(Number)
+    const now = new Date()
+    const target = new Date()
+    target.setHours(h, m, 0, 0)
+    if (target <= now) target.setDate(target.getDate() + 7)
+    timer = setTimeout(() => {
+      if (cancelled) return
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('Soccer Zone FC ⚽', { body: message.slice(0, 250), icon: '/soccer-zone-logo.jpeg' })
+      }
+      schedule()
+    }, target.getTime() - now.getTime())
   }
-  let permission = Notification.permission
-  if (permission === 'default') {
-    permission = await Notification.requestPermission()
+  schedule()
+  return () => {
+    cancelled = true
+    clearTimeout(timer)
   }
-  if (permission === 'granted') {
-    new Notification('Soccer Zone FC ⚽', {
-      body: message.slice(0, 250),
-      icon: '/soccer-zone-logo.jpeg',
-    })
-    return true
-  }
-  alert('הרשאת התראות נדחתה. ניתן לשנות זאת בהגדרות הדפדפן.')
-  return false
 }
 
 const WhatsAppIcon = () => (
@@ -116,6 +117,7 @@ const TIME_PRESETS = [
 
 const NotificationsPanel = ({ leagueName = '', teamsMsg = '', teams = [] }) => {
   const today = new Date().toISOString().slice(0, 10)
+  const notificationSupported = typeof window !== 'undefined' && 'Notification' in window
 
   const [activeTemplateId, setActiveTemplateId] = useState(null)
   const [messageText, setMessageText] = useState('')
@@ -123,9 +125,30 @@ const NotificationsPanel = ({ leagueName = '', teamsMsg = '', teams = [] }) => {
   const [reminderDate, setReminderDate] = useState(today)
   const [reminderTimePreset, setReminderTimePreset] = useState(null)
   const [reminderTimeCustom, setReminderTimeCustom] = useState('')
+  const [isWeekly, setIsWeekly] = useState(false)
   const [scheduledLabel, setScheduledLabel] = useState('')
+  const [hasWeeklyReminder, setHasWeeklyReminder] = useState(
+    () => typeof window !== 'undefined' && !!localStorage.getItem(WEEKLY_REMINDER_KEY),
+  )
 
   const reminderTime = reminderTimePreset === 'custom' ? reminderTimeCustom : (reminderTimePreset ?? '')
+  const notificationPermission = notificationSupported ? Notification.permission : 'denied'
+
+  // Restore weekly reminder from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(WEEKLY_REMINDER_KEY)
+    if (!stored || !notificationSupported) return
+    try {
+      const { time, message } = JSON.parse(stored)
+      if (Notification.permission === 'granted') {
+        const cancel = scheduleWeekly(time, message)
+        return cancel
+      }
+    } catch {
+      localStorage.removeItem(WEEKLY_REMINDER_KEY)
+      setHasWeeklyReminder(false)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const templates = getTemplates(leagueName, teamsMsg, teams)
 
@@ -140,71 +163,82 @@ const NotificationsPanel = ({ leagueName = '', teamsMsg = '', teams = [] }) => {
     setMessageText(template.message)
     setShowScheduler(false)
     setScheduledLabel('')
-    // Pre-select the template's preferred time preset
-    if (template.defaultTime) {
-      setReminderTimePreset(template.defaultTime)
-    } else {
-      setReminderTimePreset(null)
-    }
+    setReminderTimePreset(template.defaultTime ?? null)
   }
 
   const handleSchedule = async () => {
     if (!reminderTime) return
-    const target = new Date(`${reminderDate}T${reminderTime}`)
-    const delay = target.getTime() - Date.now()
-    if (delay <= 0) {
-      alert('הזמן שנבחר כבר עבר. בחר זמן עתידי.')
-      return
+    if (!notificationSupported) { alert('הדפדפן שלך לא תומך בהתראות'); return }
+    let permission = Notification.permission
+    if (permission === 'default') permission = await Notification.requestPermission()
+    if (permission !== 'granted') { alert('הרשאת התראות נדחתה. ניתן לשנות זאת בהגדרות הדפדפן.'); return }
+
+    const [h, m] = reminderTime.split(':').map(Number)
+    const target = new Date(reminderDate)
+    target.setHours(h, m, 0, 0)
+    // Auto-advance past times instead of erroring
+    if (target.getTime() <= Date.now()) {
+      target.setDate(target.getDate() + (isWeekly ? 7 : 1))
     }
-    // Request permission upfront so we don't fire into a denied state later
-    if (!('Notification' in window)) {
-      alert('הדפדפן שלך לא תומך בהתראות')
-      return
-    }
-    if (Notification.permission === 'default') {
-      await Notification.requestPermission()
-    }
-    if (Notification.permission !== 'granted') {
-      alert('הרשאת התראות נדחתה. ניתן לשנות זאת בהגדרות הדפדפן.')
-      return
-    }
+
     const captured = messageText
-    setTimeout(() => {
-      new Notification('Soccer Zone FC ⚽', {
-        body: captured.slice(0, 250),
-        icon: '/soccer-zone-logo.jpeg',
-      })
-    }, delay)
-    const dateLabel = new Date(`${reminderDate}T${reminderTime}`).toLocaleString('he-IL', {
-      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-    })
-    setScheduledLabel(`✓ תזכורת נקבעה ל-${dateLabel}`)
+    if (isWeekly) {
+      localStorage.setItem(WEEKLY_REMINDER_KEY, JSON.stringify({ time: reminderTime, message: captured }))
+      setHasWeeklyReminder(true)
+      scheduleWeekly(reminderTime, captured)
+      setScheduledLabel(`✓ תזכורת שבועית נקבעה ל-${reminderTime}`)
+    } else {
+      const delay = target.getTime() - Date.now()
+      setTimeout(() => {
+        new Notification('Soccer Zone FC ⚽', { body: captured.slice(0, 250), icon: '/soccer-zone-logo.jpeg' })
+      }, delay)
+      const label = target.toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+      setScheduledLabel(`✓ תזכורת נקבעה ל-${label}`)
+    }
     setShowScheduler(false)
   }
 
-  const notificationSupported = typeof window !== 'undefined' && 'Notification' in window
-  const notificationPermission = notificationSupported ? Notification.permission : 'denied'
+  const handleCancelWeekly = () => {
+    localStorage.removeItem(WEEKLY_REMINDER_KEY)
+    setHasWeeklyReminder(false)
+    setScheduledLabel('')
+  }
 
   return (
     <div className="mt-4 rounded-xl border border-dashed border-gray-300 p-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-800">📣 הודעות ותזכורות</h3>
-        {notificationSupported && notificationPermission === 'default' && (
-          <button
-            type="button"
-            onClick={() => Notification.requestPermission()}
-            className="rounded-lg border px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
-          >
-            🔔 אפשר התראות
-          </button>
-        )}
-        {notificationSupported && notificationPermission === 'granted' && (
-          <span className="text-xs text-green-600">🔔 התראות מופעלות</span>
-        )}
+        <div className="flex items-center gap-2">
+          {hasWeeklyReminder ? (
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-blue-600">🔁 תזכורת שבועית פעילה</span>
+              <button
+                type="button"
+                onClick={handleCancelWeekly}
+                data-testid="notif-cancel-weekly"
+                className="text-xs text-gray-400 underline hover:text-gray-600"
+              >
+                בטל
+              </button>
+            </div>
+          ) : null}
+          {notificationSupported && notificationPermission === 'default' ? (
+            <button
+              type="button"
+              onClick={() => Notification.requestPermission()}
+              className="rounded-lg border px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
+            >
+              🔔 אפשר התראות
+            </button>
+          ) : null}
+          {notificationSupported && notificationPermission === 'granted' && !hasWeeklyReminder ? (
+            <span className="text-xs text-green-600">🔔 התראות מופעלות</span>
+          ) : null}
+        </div>
       </div>
       <p className="mt-1 text-xs text-gray-500">בחר תבנית, ערוך את ההודעה ושלח.</p>
 
-      {/* Template selector */}
+      {/* Template buttons */}
       <div className="mt-3 flex flex-wrap gap-2">
         {templates.map((template) => (
           <button
@@ -229,7 +263,7 @@ const NotificationsPanel = ({ leagueName = '', teamsMsg = '', teams = [] }) => {
         <div className="mt-3 space-y-2">
           <textarea
             value={messageText}
-            onChange={(event) => setMessageText(event.target.value)}
+            onChange={(e) => setMessageText(e.target.value)}
             data-testid="notif-message-textarea"
             rows={5}
             className="w-full rounded-xl border px-3 py-2 text-sm"
@@ -237,7 +271,6 @@ const NotificationsPanel = ({ leagueName = '', teamsMsg = '', teams = [] }) => {
             dir="rtl"
           />
 
-          {/* Action buttons */}
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -249,12 +282,11 @@ const NotificationsPanel = ({ leagueName = '', teamsMsg = '', teams = [] }) => {
               <WhatsAppIcon />
               שלח בוואטסאפ
             </button>
-
-            {notificationSupported && (
+            {notificationSupported ? (
               <button
                 type="button"
                 onClick={() => {
-                  setShowScheduler((prev) => !prev)
+                  setShowScheduler((p) => !p)
                   setScheduledLabel('')
                 }}
                 disabled={!messageText.trim()}
@@ -263,19 +295,16 @@ const NotificationsPanel = ({ leagueName = '', teamsMsg = '', teams = [] }) => {
               >
                 ⏰ תזכיר לי
               </button>
-            )}
-
-            {scheduledLabel ? (
-              <span className="text-xs text-green-700">{scheduledLabel}</span>
             ) : null}
+            {scheduledLabel ? <span className="text-xs text-green-700">{scheduledLabel}</span> : null}
           </div>
 
           {/* Scheduler */}
           {showScheduler ? (
-            <div className="rounded-xl border bg-gray-50 p-3 space-y-3" data-testid="notif-scheduler">
+            <div className="space-y-3 rounded-xl border bg-gray-50 p-3" data-testid="notif-scheduler">
               {/* Date */}
-              <div className="flex items-center gap-2 text-sm">
-                <label className="shrink-0 text-gray-600">📅 תאריך:</label>
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-sm text-gray-600">📅</span>
                 <input
                   type="date"
                   value={reminderDate}
@@ -287,8 +316,8 @@ const NotificationsPanel = ({ leagueName = '', teamsMsg = '', teams = [] }) => {
               </div>
 
               {/* Time presets */}
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="shrink-0 text-gray-600">🕐 שעה:</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-gray-600">🕐</span>
                 {TIME_PRESETS.map((preset) => (
                   <button
                     key={preset.value}
@@ -315,6 +344,18 @@ const NotificationsPanel = ({ leagueName = '', teamsMsg = '', teams = [] }) => {
                   />
                 ) : null}
               </div>
+
+              {/* Weekly toggle */}
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={isWeekly}
+                  onChange={(e) => setIsWeekly(e.target.checked)}
+                  data-testid="notif-weekly-checkbox"
+                  className="h-4 w-4 rounded"
+                />
+                🔁 חזור כל שבוע
+              </label>
 
               <button
                 type="button"

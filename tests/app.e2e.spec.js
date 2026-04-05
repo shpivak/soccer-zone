@@ -792,3 +792,119 @@ test('regular league combined share includes all teams in standings', async ({ p
   expect(clipboardText).toContain('קבוצה 5')
   expect(clipboardText).toContain('קבוצה 6')
 })
+
+// ─── Notification panel ───────────────────────────────────────────────────────
+
+// Spy on window.Notification and grant permission so tests can verify calls
+const setupNotificationSpy = async (page, context) => {
+  await context.grantPermissions(['notifications'])
+  await page.addInitScript(() => {
+    window.__notifCalls = []
+    function SpyNotification(title, opts) {
+      window.__notifCalls.push({ title, body: opts?.body ?? '' })
+    }
+    SpyNotification.permission = 'granted'
+    SpyNotification.requestPermission = () => Promise.resolve('granted')
+    window.Notification = SpyNotification
+  })
+}
+
+test('admin notification panel: template renders, scheduler opens, confirmation shows', async ({
+  page,
+  context,
+}) => {
+  await setupNotificationSpy(page, context)
+  await page.reload()
+  await page.getByRole('button', { name: /יאללה נשחק/ }).click({ timeout: 2000 }).catch(() => {})
+
+  // Unlock admin and stay on admin panel
+  await page.getByTestId('nav-admin').click()
+  await page.getByTestId('admin-password-input').fill('SoccerZone26')
+  await page.getByTestId('admin-unlock-button').click()
+
+  // All template buttons visible
+  await expect(page.getByTestId('notif-template-morning')).toBeVisible()
+  await expect(page.getByTestId('notif-template-squads')).toBeVisible()
+  await expect(page.getByTestId('notif-template-custom')).toBeVisible()
+
+  // Select morning template — textarea should fill
+  await page.getByTestId('notif-template-morning').click()
+  const textarea = page.getByTestId('notif-message-textarea')
+  await expect(textarea).toBeVisible()
+  await expect(textarea).toHaveValue(/תזכורת/)
+
+  // Open scheduler
+  await page.getByTestId('notif-schedule-toggle').click()
+  await expect(page.getByTestId('notif-scheduler')).toBeVisible()
+  await expect(page.getByTestId('notif-time-preset-10:00')).toBeVisible()
+
+  // 10:00 preset should be pre-selected (morning template default)
+  await expect(page.getByTestId('notif-time-preset-10:00')).toHaveClass(/green/)
+
+  // Confirm — time may be past today so it auto-advances; confirmation label appears
+  await page.getByTestId('notif-schedule-confirm').click()
+  await expect(page.getByText(/תזכורת נקבעה/)).toBeVisible()
+})
+
+test('admin notification panel: reminder fires at scheduled time via fake clock', async ({
+  page,
+  context,
+}) => {
+  // Freeze clock at 09:58 so 10:00 morning preset is 2 minutes in the future
+  await page.clock.install({ time: new Date('2026-04-05T09:58:00') })
+  await setupNotificationSpy(page, context)
+  await page.reload()
+  await page.getByRole('button', { name: /יאללה נשחק/ }).click({ timeout: 2000 }).catch(() => {})
+
+  await page.getByTestId('nav-admin').click()
+  await page.getByTestId('admin-password-input').fill('SoccerZone26')
+  await page.getByTestId('admin-unlock-button').click()
+
+  await page.getByTestId('notif-template-morning').click()
+  await page.getByTestId('notif-schedule-toggle').click()
+  // 10:00 preset is pre-selected and 2 min in the future — confirm immediately
+  await page.getByTestId('notif-schedule-confirm').click()
+  await expect(page.getByText(/תזכורת נקבעה/)).toBeVisible()
+
+  // Advance fake clock 3 minutes — fires the 2-minute setTimeout
+  await page.clock.fastForward('3m')
+
+  const calls = await page.evaluate(() => window.__notifCalls)
+  expect(calls).toHaveLength(1)
+  expect(calls[0].title).toBe('Soccer Zone FC ⚽')
+})
+
+test('admin notification panel: weekly reminder saves to localStorage and shows indicator', async ({
+  page,
+  context,
+}) => {
+  await page.clock.install({ time: new Date('2026-04-05T09:58:00') })
+  await setupNotificationSpy(page, context)
+  await page.reload()
+  await page.getByRole('button', { name: /יאללה נשחק/ }).click({ timeout: 2000 }).catch(() => {})
+
+  await page.getByTestId('nav-admin').click()
+  await page.getByTestId('admin-password-input').fill('SoccerZone26')
+  await page.getByTestId('admin-unlock-button').click()
+
+  await page.getByTestId('notif-template-morning').click()
+  await page.getByTestId('notif-schedule-toggle').click()
+  await page.getByTestId('notif-weekly-checkbox').check()
+  await page.getByTestId('notif-schedule-confirm').click()
+
+  // Weekly indicator visible, cancel button present
+  await expect(page.getByText(/תזכורת שבועית/)).toBeVisible()
+  await expect(page.getByTestId('notif-cancel-weekly')).toBeVisible()
+
+  // Saved to localStorage
+  const stored = await page.evaluate(() => localStorage.getItem('soccer-zone-weekly-reminder'))
+  expect(stored).not.toBeNull()
+  const parsed = JSON.parse(stored)
+  expect(parsed.time).toBe('10:00')
+
+  // Cancel removes indicator and localStorage entry
+  await page.getByTestId('notif-cancel-weekly').click()
+  await expect(page.getByText(/תזכורת שבועית/)).toHaveCount(0)
+  const cleared = await page.evaluate(() => localStorage.getItem('soccer-zone-weekly-reminder'))
+  expect(cleared).toBeNull()
+})
