@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-const VERSION = '1.0.5'
+const VERSION = '1.0.6'
 const STORAGE_KEY = 'soccer-zone-whats-new-seen'
 
 const WhatsNew = () => {
@@ -24,23 +24,23 @@ const WhatsNew = () => {
         <ul className="space-y-2.5 text-sm text-gray-700">
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>שמירת נתונים</strong> — כל הנתונים נשמרים אוטומטית ולא יאבדו בין רענונים</span>
+            <span><strong>לוח תוצאות משופר</strong> — פריסה זה לצד זה, צבע קבוצה ברקע, שעון אופציונלי עם מילישניות</span>
           </li>
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>ניהול מוגן סיסמה</strong> — אזור הניהול מאובטח ונשאר פתוח בתוך הסשן</span>
+            <span><strong>דירוג עם מדליות</strong> — 🥇🥈🥉 למקומות 1–5 בכובשים, מבשלים והגנה</span>
           </li>
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>ניווט תחתון</strong> — מצב משחק, סטטיסטיקות וניהול בלחיצה אחת</span>
+            <span><strong>תיאור משחק</strong> — שדה טקסט אופציונלי לתיאור כל משחק, מוצג בטבלה ובשיתוף</span>
           </li>
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>עיצוב חדש</strong> — לוגו, צבעי ירוק ואדום, רקע מרענן ולחצנים ברורים</span>
+            <span><strong>שיתוף בוואטסאפ</strong> — הודעת סיכום יומית וכללית עם כפתורי שיתוף והעתקה</span>
           </li>
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>הוספת שחקנים</strong> — כפתור + ישירות בכל קבוצה להוספה מהירה</span>
+            <span><strong>מחיקת יום</strong> — כפתור למחיקת הטורניר הנבחר ישירות מהמסך</span>
           </li>
         </ul>
         <button

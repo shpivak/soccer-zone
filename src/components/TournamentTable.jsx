@@ -10,8 +10,13 @@ const TournamentTable = ({ games, teams, league, onEdit, onDelete, readOnly }) =
         {games.map((game) => (
           <article key={game.id} data-testid={`game-row-${game.id}`} className="rounded-xl border p-3">
             <p className="text-lg font-semibold">
-              {teamMap.get(game.teamA)} {game.score.a} - {game.score.b} {teamMap.get(game.teamB)}
+              {teamMap.get(game.teamA)} {game.score.a} – {game.score.b} {teamMap.get(game.teamB)}
             </p>
+
+            {game.description && (
+              <p className="mt-1 text-sm italic text-gray-500">📝 {game.description}</p>
+            )}
+
             <div className="mt-2 flex gap-2">
               <button
                 onClick={() => onEdit(game)}

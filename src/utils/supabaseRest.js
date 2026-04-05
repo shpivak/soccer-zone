@@ -75,28 +75,45 @@ const fromTournamentRow = (row) => ({
   games: Array.isArray(row.games) ? row.games : [],
 })
 
+// description and clockSeconds are stored as a hidden _meta entry inside the events JSONB column
+// so no extra Supabase columns are required
+const MATCH_META_TYPE = '_meta'
+
 const toMatchRows = (tournaments) =>
   tournaments.flatMap((tournament) =>
-    (tournament.games ?? []).map((game) => ({
-      id: game.id,
-      tournament_id: tournament.id,
-      league_id: tournament.leagueId,
-      round: game.round ?? 1,
-      team_a: game.teamA,
-      team_b: game.teamB,
-      score: game.score,
-      events: game.events ?? [],
-    })),
+    (tournament.games ?? []).map((game) => {
+      const meta =
+        game.description || game.clockSeconds
+          ? [{ type: MATCH_META_TYPE, description: game.description ?? null, clockSeconds: game.clockSeconds ?? 0 }]
+          : []
+      return {
+        id: game.id,
+        tournament_id: tournament.id,
+        league_id: tournament.leagueId,
+        round: game.round ?? 1,
+        team_a: game.teamA,
+        team_b: game.teamB,
+        score: game.score,
+        events: [...meta, ...(game.events ?? [])],
+      }
+    }),
   )
 
-const fromMatchRow = (row) => ({
-  id: row.id,
-  round: row.round ?? 1,
-  teamA: row.team_a,
-  teamB: row.team_b,
-  score: row.score ?? { a: 0, b: 0 },
-  events: Array.isArray(row.events) ? row.events : [],
-})
+const fromMatchRow = (row) => {
+  const allEvents = Array.isArray(row.events) ? row.events : []
+  const meta = allEvents.find((e) => e.type === MATCH_META_TYPE)
+  const events = allEvents.filter((e) => e.type !== MATCH_META_TYPE)
+  return {
+    id: row.id,
+    round: row.round ?? 1,
+    teamA: row.team_a,
+    teamB: row.team_b,
+    score: row.score ?? { a: 0, b: 0 },
+    clockSeconds: meta?.clockSeconds ?? 0,
+    events,
+    ...(meta?.description ? { description: meta.description } : {}),
+  }
+}
 
 const withMatchesAttached = (tournaments, matchRows) => {
   const matchesByTournamentId = new Map()
