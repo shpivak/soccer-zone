@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import CollapsibleSection from '../components/CollapsibleSection'
 import GameInput from '../components/GameInput'
 import ScoreBoard from '../components/ScoreBoard'
+import ShareButton from '../components/ShareButton'
 import TeamBuilder from '../components/TeamBuilder'
 import TournamentTable from '../components/TournamentTable'
 import { APP_CONFIG } from '../config'
@@ -15,7 +16,39 @@ import {
   getSessionLabel,
   LEAGUE_TYPES,
 } from '../utils/leagueUtils'
-import { calculateLeagueStandings, calculateStandings } from '../utils/tournamentUtils'
+import {
+  calculateLeagueStandings,
+  calculatePlayerStats,
+  calculateStandings,
+  getLeaders,
+} from '../utils/tournamentUtils'
+import {
+  generateCombinedShareMessage,
+  generateDayShareMessage,
+  generateOverallShareMessage,
+} from '../utils/shareUtils'
+
+const getTournamentTopStats = (games, players) => {
+  const goalCount = {}
+  const assistCount = {}
+  for (const game of games) {
+    for (const event of game.events ?? []) {
+      if (event.scorer) goalCount[event.scorer] = (goalCount[event.scorer] ?? 0) + 1
+      if (event.assister) assistCount[event.assister] = (assistCount[event.assister] ?? 0) + 1
+    }
+  }
+
+  const getTopEntries = (countMap) => {
+    if (Object.keys(countMap).length === 0) return []
+    const sorted = Object.entries(countMap).sort((a, b) => b[1] - a[1])
+    const topCount = sorted[0][1]
+    return sorted
+      .filter(([, count]) => count === topCount)
+      .map(([id, count]) => ({ id, count, name: players.find((p) => p.id === id)?.name ?? id }))
+  }
+
+  return { topScorers: getTopEntries(goalCount), topAssisters: getTopEntries(assistCount) }
+}
 
 const LiveTournament = ({ adminMode }) => {
   const { activeLeagueId, leagues, players, tournaments, setLeagues, setPlayers, setTournaments } = useAppContext()
@@ -47,6 +80,37 @@ const LiveTournament = ({ adminMode }) => {
     if (!selectedTournament) return []
     return calculateStandings(selectedTournament, APP_CONFIG.points)
   }, [league, leagueTournaments, selectedTournament])
+
+  // Overall stats for share (combined template)
+  const overallStats = useMemo(
+    () => calculatePlayerStats(leaguePlayers, leagueTournaments, APP_CONFIG.points, league?.type),
+    [leaguePlayers, leagueTournaments, league],
+  )
+  const overallLeaders = useMemo(() => getLeaders(overallStats), [overallStats])
+
+  // Per-tournament top scorer / assister
+  const tournamentTopStats = useMemo(() => {
+    if (!selectedTournament || selectedTournament.games.length === 0) return null
+    return getTournamentTopStats(selectedTournament.games, leaguePlayers)
+  }, [selectedTournament, leaguePlayers])
+
+  // Share messages
+  const dayShareMsg = useMemo(() => {
+    if (!selectedTournament || !league) return ''
+    // Standings table in day share only for tournament mode; league standings go in the overall share only
+    const dayStandings = league.type === LEAGUE_TYPES.tournament ? standings : []
+    // Tournament mode: skip individual game results (only stats/standings matter)
+    const includeResults = league.type !== LEAGUE_TYPES.tournament
+    return generateDayShareMessage(selectedTournament, selectedTournament.teams, leaguePlayers, league.name, dayStandings, { includeResults })
+  }, [selectedTournament, leaguePlayers, league, standings])
+
+  const combinedShareMsg = useMemo(() => {
+    if (!dayShareMsg) return ''
+    // Only include team standings for regular leagues; tourney/friendly standings are per-session only
+    const overallStandings = league?.type === LEAGUE_TYPES.regular ? standings : []
+    const overallMsg = generateOverallShareMessage(overallStats, overallLeaders, overallStandings, league?.name ?? '')
+    return generateCombinedShareMessage(dayShareMsg, overallMsg)
+  }, [dayShareMsg, overallStats, overallLeaders, standings, league])
 
   const updateSelectedTournament = (updater) => {
     setTournaments((current) =>
@@ -236,6 +300,14 @@ const LiveTournament = ({ adminMode }) => {
     ])
   }
 
+  const handleDeleteTournament = () => {
+    if (!adminMode || !selectedTournament) return
+    if (!window.confirm(`למחוק את ${labels.selectLabel} ${selectedTournament.leagueNumber ?? ''}? פעולה זו אינה הפיכה.`)) return
+    const remaining = leagueTournaments.filter((t) => t.id !== selectedTournamentId)
+    setTournaments((current) => current.filter((t) => t.id !== selectedTournamentId))
+    setSelectedTournamentId(remaining[remaining.length - 1]?.id ?? null)
+  }
+
   const handleAddFriendlyTeam = () => {
     if (!adminMode || !league || league.type !== LEAGUE_TYPES.friendly || !selectedTournament) return
     if ((selectedTournament.teams?.length ?? 0) >= APP_CONFIG.friendly.maxTeams) {
@@ -291,28 +363,44 @@ const LiveTournament = ({ adminMode }) => {
       <div className="rounded-2xl bg-white p-3 shadow-sm">
         <h2 className="mb-2 text-sm font-bold text-gray-700">{labels.liveTitle}</h2>
         <div className="flex items-center gap-2">
-        <select
-          value={selectedTournamentId}
-          onChange={(e) => setSelectedTournamentId(e.target.value)}
-          data-testid="tournament-select"
-          className="min-w-0 flex-1 rounded-xl border px-3 py-2.5 text-sm"
-        >
-          {leagueTournaments.map((tournament) => (
-            <option key={tournament.id} value={tournament.id}>
-              {league.name} {labels.selectLabel} {tournament.leagueNumber ?? '-'} / {tournament.year ?? '-'} -{' '}
-              {tournament.date}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={handleCreateTournament}
-          disabled={!adminMode}
-          data-testid="create-tournament"
-          className="shrink-0 min-h-[44px] rounded-xl bg-green-600 px-4 py-2.5 text-sm text-white disabled:opacity-40"
-        >
-          {labels.createAnother}
-        </button>
+          <select
+            value={selectedTournamentId}
+            onChange={(e) => setSelectedTournamentId(e.target.value)}
+            data-testid="tournament-select"
+            className="min-w-0 flex-1 rounded-xl border px-3 py-2.5 text-sm"
+          >
+            {leagueTournaments.map((tournament) => (
+              <option key={tournament.id} value={tournament.id}>
+                {league.name} {labels.selectLabel} {tournament.leagueNumber ?? '-'} / {tournament.year ?? '-'} -{' '}
+                {tournament.date}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleCreateTournament}
+            disabled={!adminMode}
+            data-testid="create-tournament"
+            className="shrink-0 min-h-[44px] rounded-xl bg-green-600 px-4 py-2.5 text-sm text-white disabled:opacity-40"
+          >
+            {labels.createAnother}
+          </button>
+          <button
+            onClick={handleDeleteTournament}
+            disabled={!adminMode}
+            data-testid="delete-tournament"
+            className="shrink-0 min-h-[44px] rounded-xl bg-red-600 px-4 py-2.5 text-sm text-white disabled:opacity-40"
+          >
+            מחק יום
+          </button>
         </div>
+
+        {/* Share buttons for this day */}
+        {selectedTournament.games.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            <ShareButton message={dayShareMsg} label="שתף תוצאות היום" name="day" />
+            <ShareButton message={combinedShareMsg} label="שתף יום + סטט׳ ליגה" name="combined" />
+          </div>
+        )}
       </div>
 
       {/* Game input */}
@@ -459,6 +547,31 @@ const LiveTournament = ({ adminMode }) => {
           onDelete={handleDeleteGame}
         />
       </CollapsibleSection>
+
+      {/* Per-session top scorer / assister */}
+      {tournamentTopStats && (
+        <section className="rounded-2xl bg-white p-4 shadow-sm">
+          <h3 className="mb-2 text-sm font-bold text-gray-700">
+            ראשי קטגוריות – {getSessionLabel(league)} זה
+          </h3>
+          <div className="flex flex-wrap gap-4 text-sm">
+            {tournamentTopStats.topScorers.length > 0 && (
+              <div>
+                ⚽ כובש:{' '}
+                <strong>{tournamentTopStats.topScorers.map((p) => p.name).join(' / ')}</strong>{' '}
+                <span className="text-gray-500">({tournamentTopStats.topScorers[0].count})</span>
+              </div>
+            )}
+            {tournamentTopStats.topAssisters.length > 0 && (
+              <div>
+                🎯 מבשל:{' '}
+                <strong>{tournamentTopStats.topAssisters.map((p) => p.name).join(' / ')}</strong>{' '}
+                <span className="text-gray-500">({tournamentTopStats.topAssisters[0].count})</span>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   )
 }

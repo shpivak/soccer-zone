@@ -16,6 +16,16 @@ const formatClock = (seconds) => {
   return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
 }
 
+const teamColorClass = {
+  black: 'bg-gray-200 border-gray-500',
+  yellow: 'bg-yellow-50 border-yellow-300',
+  pink: 'bg-pink-50 border-pink-300',
+  orange: 'bg-orange-50 border-orange-300',
+  blue: 'bg-blue-50 border-blue-300',
+  gray: 'bg-gray-50 border-gray-300',
+  white: 'bg-white border-gray-300',
+}
+
 const normalizeEditingEvents = (editingGame, teams, players) => {
   if (!editingGame) return []
 
@@ -37,6 +47,9 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
   const [events, setEvents] = useState(() => normalizeEditingEvents(editingGame, teams, players))
   const [clockSeconds, setClockSeconds] = useState(editingGame?.clockSeconds ?? 0)
   const [isClockRunning, setIsClockRunning] = useState(false)
+  const [clockMs, setClockMs] = useState(0)
+  const [showTimer, setShowTimer] = useState(false)
+  const [matchDescription, setMatchDescription] = useState(editingGame?.description ?? '')
 
   useEffect(() => {
     if (!isClockRunning) return undefined
@@ -45,6 +58,17 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
     }, 1000)
     return () => window.clearInterval(intervalId)
   }, [isClockRunning])
+
+  useEffect(() => {
+    if (!isClockRunning) return undefined
+    const msId = window.setInterval(() => {
+      setClockMs((prev) => (prev + Math.floor(Math.random() * 13) + 5) % 100)
+    }, 80)
+    return () => window.clearInterval(msId)
+  }, [isClockRunning])
+
+  const teamAColor = teams.find((t) => t.id === teamA)?.color ?? 'gray'
+  const teamBColor = teams.find((t) => t.id === teamB)?.color ?? 'gray'
 
   const teamAPlayers = useMemo(
     () => players.filter((player) => teams.find((team) => team.id === teamA)?.players.includes(player.id)),
@@ -61,6 +85,8 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
     setEvents([])
     setClockSeconds(0)
     setIsClockRunning(false)
+    setClockMs(0)
+    setMatchDescription('')
     setTeamA(teams[0]?.id ?? '')
     setTeamB(teams[1]?.id ?? '')
   }
@@ -107,6 +133,7 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
       teamB,
       score: { a: Number(scoreA), b: Number(scoreB) },
       clockSeconds,
+      ...(matchDescription.trim() ? { description: matchDescription.trim() } : {}),
       events: events.map((event) => ({
         type: 'goal',
         teamId: event.teamId,
@@ -122,14 +149,16 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
       <h2 className="mb-3 text-lg font-bold">{editingGame ? 'עריכת משחק' : 'הזנת משחק חדש'}</h2>
 
       <div className="rounded-2xl border bg-white p-4">
-        <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr] md:items-center">
-          <div className="space-y-3 text-center">
+        {/* Teams and scores – always side by side */}
+        <div className="grid grid-cols-2 gap-4">
+          {/* Team A */}
+          <div className={`space-y-2 rounded-xl border p-3 text-center ${teamColorClass[teamAColor] ?? 'bg-gray-50 border-gray-300'}`}>
             <select
               value={teamA}
               disabled={disabled}
               onChange={(event) => setTeamA(event.target.value)}
               data-testid="game-team-a-select"
-              className="w-full rounded-xl border border-gray-300 bg-white p-2 text-center"
+              className="w-full rounded-xl border border-gray-300 bg-white p-2 text-center text-sm"
             >
               {teams.map((team) => (
                 <option key={team.id} value={team.id} className="text-black">
@@ -163,52 +192,14 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
             )}
           </div>
 
-          <div className="space-y-3 text-center">
-            <div className="text-sm uppercase tracking-[0.3em] text-gray-400">Live</div>
-            <div data-testid="game-timer-display" className="text-4xl font-black">
-              {formatClock(clockSeconds)}
-            </div>
-            <div className="flex justify-center gap-2">
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => setIsClockRunning(true)}
-                data-testid="game-timer-start"
-                className="min-h-[44px] min-w-[44px] rounded-xl bg-emerald-500 px-3 py-2 text-lg font-semibold text-black"
-              >
-                ▶
-              </button>
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => setIsClockRunning(false)}
-                data-testid="game-timer-pause"
-                className="min-h-[44px] min-w-[44px] rounded-xl bg-amber-400 px-3 py-2 text-lg font-semibold text-black"
-              >
-                ⏸
-              </button>
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => {
-                  setIsClockRunning(false)
-                  setClockSeconds(0)
-                }}
-                data-testid="game-timer-reset"
-                className="min-h-[44px] min-w-[44px] rounded-xl bg-gray-100 px-3 py-2 text-lg"
-              >
-                🔄
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-3 text-center">
+          {/* Team B */}
+          <div className={`space-y-2 rounded-xl border p-3 text-center ${teamColorClass[teamBColor] ?? 'bg-gray-50 border-gray-300'}`}>
             <select
               value={teamB}
               disabled={disabled}
               onChange={(event) => setTeamB(event.target.value)}
               data-testid="game-team-b-select"
-              className="w-full rounded-xl border border-gray-300 bg-white p-2 text-center"
+              className="w-full rounded-xl border border-gray-300 bg-white p-2 text-center text-sm"
             >
               {teams.map((team) => (
                 <option key={team.id} value={team.id} className="text-black">
@@ -242,6 +233,77 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
             )}
           </div>
         </div>
+
+        {/* Timer – optional, smaller, below scores */}
+        <div className="mt-3 border-t pt-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-gray-500">⏱ שעון משחק</span>
+            <button
+              type="button"
+              onClick={() => setShowTimer((v) => !v)}
+              className="text-xs text-blue-500 hover:text-blue-700"
+            >
+              {showTimer ? 'הסתר' : 'הצג'}
+            </button>
+          </div>
+          {showTimer && (
+            <div className="mt-2 text-center">
+              <div data-testid="game-timer-display" className="text-2xl font-black tabular-nums">
+                {formatClock(clockSeconds)}
+                <span className="text-sm font-medium text-gray-400">
+                  .{String(clockMs).padStart(2, '0')}
+                </span>
+              </div>
+              <div className="mt-2 flex justify-center gap-2">
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setIsClockRunning(true)}
+                  data-testid="game-timer-start"
+                  className="min-h-[40px] min-w-[40px] rounded-xl bg-emerald-500 px-3 py-2 text-base font-semibold text-black"
+                >
+                  ▶
+                </button>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setIsClockRunning(false)}
+                  data-testid="game-timer-pause"
+                  className="min-h-[40px] min-w-[40px] rounded-xl bg-amber-400 px-3 py-2 text-base font-semibold text-black"
+                >
+                  ⏸
+                </button>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => {
+                    setIsClockRunning(false)
+                    setClockSeconds(0)
+                    setClockMs(0)
+                  }}
+                  data-testid="game-timer-reset"
+                  className="min-h-[40px] min-w-[40px] rounded-xl bg-gray-100 px-3 py-2 text-base"
+                >
+                  🔄
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Optional match description */}
+      <div className="mt-3">
+        <label className="mb-1 block text-xs font-medium text-gray-500">📝 תיאור המשחק (אופציונלי)</label>
+        <textarea
+          value={matchDescription}
+          disabled={disabled}
+          onChange={(e) => setMatchDescription(e.target.value)}
+          placeholder="לדוגמה: משחק סוער עם הפיכות רבות..."
+          rows={2}
+          data-testid="game-description-input"
+          className="w-full resize-none rounded-xl border border-gray-300 p-3 text-sm disabled:opacity-50"
+        />
       </div>
 
       {events.length > 0 ? (
@@ -265,7 +327,7 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
                   data-testid={`event-scorer-${index}`}
                   className="rounded-lg border p-2"
                 >
-                  <option value="">כובש</option>
+                  <option value="">כובש (אופציונלי)</option>
                   {eventPlayers.map((player) => (
                     <option key={player.id} value={player.id}>
                       {player.name}
