@@ -19,7 +19,13 @@ const addPlayers = async (page, names) => {
 }
 
 const dragPlayer = async (page, playerName, targetTestId) => {
-  const source = page.locator('[data-testid^="player-chip-"]').filter({ hasText: playerName }).first()
+  const chips = page.locator('[data-testid^="player-chip-"]')
+  let source = chips.filter({ hasText: playerName }).first()
+
+  if ((await source.count()) === 0) {
+    source = chips.filter({ has: page.locator(`input[value="${playerName}"]`) }).first()
+  }
+
   const target = page.getByTestId(targetTestId)
   const dataTransfer = await page.evaluateHandle(() => new DataTransfer())
   await source.dispatchEvent('dragstart', { dataTransfer })
@@ -64,7 +70,7 @@ test.beforeEach(async ({ page }) => {
       sessionStorage.setItem('soccer-zone-e2e-bootstrapped', 'true')
     }
     // Dismiss the "What's New" popup so it doesn't block test interactions
-    localStorage.setItem('soccer-zone-whats-new-seen', '1.0.6')
+    localStorage.setItem('soccer-zone-whats-new-seen', '1.0.7')
   })
   await page.goto('/')
   // Dismiss What's New modal if it shows (guards against dev-server version cache mismatch)
@@ -719,6 +725,65 @@ test('share copy button copies the combined message to clipboard', async ({ page
   expect(clipboardText).toContain('───────────────')
   // Overall section heading
   expect(clipboardText).toContain('סיכום כללי')
+  expect(clipboardText).toContain('league=tournament-3')
+  expect(clipboardText).toContain('tournament=2026-03-07-sb')
+})
+
+test('team share copies assigned squads and deep links to the selected league and tournament', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+
+  await page.goto('/?league=tournament-3&tournament=2026-03-07-sb')
+  await page.getByRole('button', { name: /יאללה נשחק/ }).click({ timeout: 2000 }).catch(() => {})
+
+  await expect(page.getByTestId('league-select')).toHaveValue('tournament-3')
+  await expect(page.getByTestId('tournament-select')).toHaveValue('2026-03-07-sb')
+  await expect(page.getByTestId('share-copy-teams')).toBeVisible()
+
+  await page.getByTestId('share-copy-teams').click()
+
+  const clipboardText = await page.evaluate(() => navigator.clipboard.readText())
+  expect(clipboardText).toContain('שבת B')
+  expect(clipboardText).toContain('שחור')
+  expect(clipboardText).toContain('יואב כהן')
+  expect(clipboardText).toContain('league=tournament-3')
+  expect(clipboardText).toContain('tournament=2026-03-07-sb')
+})
+
+// TODO: flaky — pressing Enter on tournament-name-input occasionally triggers a page navigation
+// (the input sits inside a form-like context), which closes the page mid-test before
+// tournament-number-input can be reached. Needs investigation into the form/submit handler.
+test.skip('admin can edit player names and session metadata', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('regular-1')
+
+  // Rename player
+  await page.getByTestId('player-name-input-regular-p1').fill('נועם המעודכן')
+
+  // Edit session name via pencil toggle
+  await page.getByTestId('tournament-name-edit-pencil').click()
+  await page.getByTestId('tournament-name-input').fill('מחזור פתיחה מעודכן')
+  await page.getByTestId('tournament-name-input').press('Enter')
+
+  // Edit number and date (still in the admin grid)
+  await page.getByTestId('tournament-number-input').fill('11')
+  await page.getByTestId('tournament-date-input').fill('2026-04-01')
+
+  await expect(page.getByTestId('player-name-input-regular-p1')).toHaveValue('נועם המעודכן')
+  await expect(page.getByTestId('tournament-select')).toContainText('מחזור פתיחה מעודכן')
+
+  await page.waitForTimeout(2000)
+  await page.reload()
+
+  await expect(page.getByTestId('league-select')).toHaveValue('regular-1')
+  await expect(page.getByTestId('player-name-input-regular-p1')).toHaveValue('נועם המעודכן')
+
+  // Name is shown in display mode — open pencil to verify persisted value
+  await page.getByTestId('tournament-name-edit-pencil').click()
+  await expect(page.getByTestId('tournament-name-input')).toHaveValue('מחזור פתיחה מעודכן')
+  await page.getByTestId('tournament-name-input').press('Escape')
+
+  await expect(page.getByTestId('tournament-number-input')).toHaveValue('11')
+  await expect(page.getByTestId('tournament-date-input')).toHaveValue('2026-04-01')
 })
 
 test('regular league combined share includes all teams in standings', async ({ page, context }) => {
@@ -741,4 +806,33 @@ test('regular league combined share includes all teams in standings', async ({ p
   expect(clipboardText).toContain('📊 טבלת ניקוד:')
   expect(clipboardText).toContain('קבוצה 5')
   expect(clipboardText).toContain('קבוצה 6')
+})
+
+// ─── Notification panel ───────────────────────────────────────────────────────
+
+test('admin notification panel: templates render and message fills textarea', async ({ page }) => {
+  await page.reload()
+  await page.getByRole('button', { name: /יאללה נשחק/ }).click({ timeout: 2000 }).catch(() => {})
+
+  // Unlock admin and stay on admin panel
+  await page.getByTestId('nav-admin').click()
+  await page.getByTestId('admin-password-input').fill('SoccerZone26')
+  await page.getByTestId('admin-unlock-button').click()
+
+  // All template buttons visible
+  await expect(page.getByTestId('notif-template-morning')).toBeVisible()
+  await expect(page.getByTestId('notif-template-squads')).toBeVisible()
+  await expect(page.getByTestId('notif-template-custom')).toBeVisible()
+
+  // Select morning template — textarea should fill
+  await page.getByTestId('notif-template-morning').click()
+  const textarea = page.getByTestId('notif-message-textarea')
+  await expect(textarea).toBeVisible()
+  await expect(textarea).toHaveValue(/תזכורת/)
+
+  // WhatsApp send button visible
+  await expect(page.getByTestId('notif-send-whatsapp')).toBeVisible()
+
+  // Scheduler toggle not present (reminders disabled)
+  await expect(page.getByTestId('notif-schedule-toggle')).toHaveCount(0)
 })

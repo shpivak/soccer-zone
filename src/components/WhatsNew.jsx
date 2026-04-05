@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-const VERSION = '1.0.6'
+const VERSION = '1.0.7'
 const STORAGE_KEY = 'soccer-zone-whats-new-seen'
 
 const WhatsNew = () => {
@@ -24,23 +24,23 @@ const WhatsNew = () => {
         <ul className="space-y-2.5 text-sm text-gray-700">
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>לוח תוצאות משופר</strong> — פריסה זה לצד זה, צבע קבוצה ברקע, שעון אופציונלי עם מילישניות</span>
+            <span><strong>הודעות וואטסאפ מוכנות</strong> — תבניות מוכנות לשליחה: תזכורת בוקר, סגלי היום, מערכת משחקים והודעה חופשית</span>
           </li>
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>דירוג עם מדליות</strong> — 🥇🥈🥉 למקומות 1–5 בכובשים, מבשלים והגנה</span>
+            <span><strong>מערכת משחקים עם שעות</strong> — הודעה אוטומטית עם שעות התחלה, אמוג׳י שעון וצבעי הקבוצות</span>
           </li>
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>תיאור משחק</strong> — שדה טקסט אופציונלי לתיאור כל משחק, מוצג בטבלה ובשיתוף</span>
+            <span><strong>בחירת טורניר להודעה</strong> — בחר לאיזה יום/סבב לשלוח ישירות מאזור הניהול</span>
           </li>
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>שיתוף בוואטסאפ</strong> — הודעת סיכום יומית וכללית עם כפתורי שיתוף והעתקה</span>
+            <span><strong>עריכת תוצאות</strong> — עריכת תוצאות ואירועי משחק קיימים ישירות מהטבלה</span>
           </li>
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>מחיקת יום</strong> — כפתור למחיקת הטורניר הנבחר ישירות מהמסך</span>
+            <span><strong>שיתוף וקישור ישיר</strong> — קישור לליגה וטורניר ספציפיים, שיתוף סגלים בוואטסאפ</span>
           </li>
         </ul>
         <button

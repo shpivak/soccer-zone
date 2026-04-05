@@ -1,6 +1,17 @@
-import { getTeamDisplayName } from './leagueUtils'
+import { getSessionDisplayName, getTeamDisplayName, LEAGUE_TYPES } from './leagueUtils'
 
 const getPlayerName = (playerId, players) => players.find((p) => p.id === playerId)?.name ?? ''
+const appendShareLink = (message, shareUrl) => (shareUrl ? `${message}\n\n🔗 ${shareUrl}` : message)
+
+const colorEmoji = {
+  black: '⚫',
+  yellow: '🟡',
+  pink: '🟣',
+  orange: '🟠',
+  blue: '🔵',
+  white: '⚪',
+  gray: '⬜',
+}
 
 const rankEmoji = (rank) => {
   if (rank === 1) return '🥇'
@@ -46,7 +57,52 @@ const getTournamentRankedStats = (games, players) => {
   return { scorers: toSorted(goalCount), assisters: toSorted(assistCount) }
 }
 
-export const generateDayShareMessage = (tournament, teams, players, leagueName, standings = [], { includeResults = true } = {}) => {
+export const buildLeagueShareUrl = (leagueId, tournamentId = '') => {
+  if (typeof window === 'undefined' || !leagueId) return ''
+  const url = new URL(window.location.href)
+  url.searchParams.set('league', leagueId)
+  if (tournamentId) {
+    url.searchParams.set('tournament', tournamentId)
+  } else {
+    url.searchParams.delete('tournament')
+  }
+  return url.toString()
+}
+
+export const generateTeamShareMessage = (tournament, players, leagueName, league, shareUrl = '') => {
+  const assignedTeams = (tournament?.teams ?? []).filter((team) => Array.isArray(team.players) && team.players.length > 0)
+  let msg = `👥 *${leagueName}*\n${getSessionDisplayName(tournament, league)}`
+
+  const teamLines = assignedTeams
+    .map((team) => {
+      const playerLines = team.players
+        .map((playerId) => getPlayerName(playerId, players))
+        .filter(Boolean)
+        .map((name) => `- ${name}`)
+        .join('\n')
+
+      const displayName = getTeamDisplayName(team)
+      // Regular league: teams have custom names — show as-is; tournament/friendly: prefix with color emoji
+      const teamHeader =
+        league?.type === LEAGUE_TYPES.regular
+          ? displayName
+          : `${colorEmoji[team.color] ?? '🟢'} ${displayName}`
+      return `${teamHeader}\n${playerLines}`
+    })
+    .join('\n\n')
+
+  msg += `\n\n${teamLines || 'אין קבוצות עם שחקנים לשיתוף'}`
+  return appendShareLink(msg, shareUrl)
+}
+
+export const generateDayShareMessage = (
+  tournament,
+  teams,
+  players,
+  leagueName,
+  standings = [],
+  { includeResults = true, shareUrl = '' } = {},
+) => {
   const date = tournament.date ?? ''
   const games = tournament.games ?? []
 
@@ -80,10 +136,10 @@ export const generateDayShareMessage = (tournament, teams, players, leagueName, 
   if (scorerLines) msg += `\n\n🥅 כובשים:\n${scorerLines}`
   if (assisterLines) msg += `\n\n🎯 מבשלים:\n${assisterLines}`
 
-  return msg
+  return appendShareLink(msg, shareUrl)
 }
 
-export const generateOverallShareMessage = (stats, leaders, standings, leagueName) => {
+export const generateOverallShareMessage = (stats, leaders, standings, leagueName, shareUrl = '') => {
   let msg = `🏆 *${leagueName} – סיכום כללי*`
 
   // Teams standings — only when passed (regular leagues)
@@ -108,7 +164,7 @@ export const generateOverallShareMessage = (stats, leaders, standings, leagueNam
   // MVP
   if (leaders?.mvp) msg += `\n\n🏆 MVP: *${leaders.mvp.name}*`
 
-  return msg
+  return appendShareLink(msg, shareUrl)
 }
 
 export const generateCombinedShareMessage = (dayMsg, overallMsg) => `${dayMsg}\n\n───────────────\n\n${overallMsg}`
