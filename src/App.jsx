@@ -70,12 +70,20 @@ function App() {
     [players, activeLeagueId],
   )
 
-  const latestTeamsShareMsg = useMemo(() => {
+  const latestTournamentForNotif = useMemo(() => {
     const leagueTournaments = tournaments.filter((t) => t.leagueId === activeLeagueId)
-    const latest = leagueTournaments[leagueTournaments.length - 1] ?? null
-    if (!latest || !activeLeague) return ''
-    return generateTeamShareMessage(latest, leaguePlayers, activeLeague.name, activeLeague)
-  }, [tournaments, activeLeagueId, leaguePlayers, activeLeague])
+    return leagueTournaments[leagueTournaments.length - 1] ?? null
+  }, [tournaments, activeLeagueId])
+
+  const latestTeamsShareMsg = useMemo(() => {
+    if (!latestTournamentForNotif || !activeLeague) return ''
+    return generateTeamShareMessage(latestTournamentForNotif, leaguePlayers, activeLeague.name, activeLeague)
+  }, [latestTournamentForNotif, leaguePlayers, activeLeague])
+
+  const latestTeamsForFixtures = useMemo(
+    () => latestTournamentForNotif?.teams ?? [],
+    [latestTournamentForNotif],
+  )
 
   useEffect(() => {
     if (leagues.length === 0) return
@@ -279,6 +287,7 @@ function App() {
                 <NotificationsPanel
                   leagueName={activeLeague?.name ?? ''}
                   teamsMsg={latestTeamsShareMsg}
+                  teams={latestTeamsForFixtures}
                 />
               </>
             ) : (
