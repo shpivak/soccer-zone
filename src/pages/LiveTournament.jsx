@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import CollapsibleSection from '../components/CollapsibleSection'
 import GameInput from '../components/GameInput'
 import ScoreBoard from '../components/ScoreBoard'
@@ -72,10 +72,12 @@ const LiveTournament = ({ adminMode }) => {
   const [gameInputMessage, setGameInputMessage] = useState('')
   const [editingTournamentName, setEditingTournamentName] = useState(false)
   const [nameEditValue, setNameEditValue] = useState('')
+  const [editingForTournamentId, setEditingForTournamentId] = useState(selectedTournamentId)
 
-  useEffect(() => {
+  if (editingForTournamentId !== selectedTournamentId) {
+    setEditingForTournamentId(selectedTournamentId)
     setEditingTournamentName(false)
-  }, [selectedTournamentId])
+  }
   const labels = getLeagueModeLabels(league?.type)
   const maxPlayersPerTeam = league ? getMaxPlayersPerTeam(league) : undefined
   const isRegularSetupEditable =
