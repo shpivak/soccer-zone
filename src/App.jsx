@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { getSessionDisplayName } from './utils/leagueUtils'
 import soccerZoneLogo from './assets/soccer-zone-logo.jpeg'
 import { useAppContext } from './hooks/useAppContext'
 import LiveTournament from './pages/LiveTournament'
@@ -70,19 +71,29 @@ function App() {
     [players, activeLeagueId],
   )
 
-  const latestTournamentForNotif = useMemo(() => {
-    const leagueTournaments = tournaments.filter((t) => t.leagueId === activeLeagueId)
-    return leagueTournaments[leagueTournaments.length - 1] ?? null
-  }, [tournaments, activeLeagueId])
+  const leagueTournamentsForNotif = useMemo(
+    () => tournaments.filter((t) => t.leagueId === activeLeagueId),
+    [tournaments, activeLeagueId],
+  )
+
+  const [notifTournamentId, setNotifTournamentId] = useState(null)
+
+  const selectedTournamentForNotif = useMemo(() => {
+    if (notifTournamentId) {
+      const found = leagueTournamentsForNotif.find((t) => t.id === notifTournamentId)
+      if (found) return found
+    }
+    return leagueTournamentsForNotif[leagueTournamentsForNotif.length - 1] ?? null
+  }, [leagueTournamentsForNotif, notifTournamentId])
 
   const latestTeamsShareMsg = useMemo(() => {
-    if (!latestTournamentForNotif || !activeLeague) return ''
-    return generateTeamShareMessage(latestTournamentForNotif, leaguePlayers, activeLeague.name, activeLeague)
-  }, [latestTournamentForNotif, leaguePlayers, activeLeague])
+    if (!selectedTournamentForNotif || !activeLeague) return ''
+    return generateTeamShareMessage(selectedTournamentForNotif, leaguePlayers, activeLeague.name, activeLeague)
+  }, [selectedTournamentForNotif, leaguePlayers, activeLeague])
 
   const latestTeamsForFixtures = useMemo(
-    () => latestTournamentForNotif?.teams ?? [],
-    [latestTournamentForNotif],
+    () => selectedTournamentForNotif?.teams ?? [],
+    [selectedTournamentForNotif],
   )
 
   useEffect(() => {
@@ -284,6 +295,23 @@ function App() {
                   </div>
                 ) : null}
 
+                {leagueTournamentsForNotif.length > 1 ? (
+                  <div className="mt-4 rounded-xl border border-dashed border-gray-300 p-3">
+                    <h3 className="text-sm font-semibold text-gray-800">📅 טורניר / סבב לשליחה</h3>
+                    <select
+                      value={notifTournamentId ?? selectedTournamentForNotif?.id ?? ''}
+                      onChange={(e) => setNotifTournamentId(e.target.value || null)}
+                      data-testid="notif-tournament-select"
+                      className="mt-2 w-full rounded-xl border px-3 py-2 text-sm"
+                    >
+                      {leagueTournamentsForNotif.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {getSessionDisplayName(t, activeLeague)} – {t.date ?? '-'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
                 <NotificationsPanel
                   leagueName={activeLeague?.name ?? ''}
                   teamsMsg={latestTeamsShareMsg}

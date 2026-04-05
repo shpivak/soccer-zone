@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { shareViaWhatsApp } from '../utils/shareUtils'
 import { getTeamDisplayName } from '../utils/leagueUtils'
 
-const WEEKLY_REMINDER_KEY = 'soccer-zone-weekly-reminder'
+// const WEEKLY_REMINDER_KEY = 'soccer-zone-weekly-reminder'
 
 const colorEmoji = {
   black: '⚫', yellow: '🟡', pink: '🟣', orange: '🟠',
@@ -78,30 +78,30 @@ const getTemplates = (leagueName, teamsMsg, teams) => [
   },
 ]
 
-// Recursive weekly scheduler — returns a cancel function
-const scheduleWeekly = (time, message) => {
-  let cancelled = false
-  let timer
-  const schedule = () => {
-    const [h, m] = time.split(':').map(Number)
-    const now = new Date()
-    const target = new Date()
-    target.setHours(h, m, 0, 0)
-    if (target <= now) target.setDate(target.getDate() + 7)
-    timer = setTimeout(() => {
-      if (cancelled) return
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        new Notification('Soccer Zone FC ⚽', { body: message.slice(0, 250), icon: '/soccer-zone-logo.jpeg' })
-      }
-      schedule()
-    }, target.getTime() - now.getTime())
-  }
-  schedule()
-  return () => {
-    cancelled = true
-    clearTimeout(timer)
-  }
-}
+// // Recursive weekly scheduler — returns a cancel function
+// const scheduleWeekly = (time, message) => {
+//   let cancelled = false
+//   let timer
+//   const schedule = () => {
+//     const [h, m] = time.split(':').map(Number)
+//     const now = new Date()
+//     const target = new Date()
+//     target.setHours(h, m, 0, 0)
+//     if (target <= now) target.setDate(target.getDate() + 7)
+//     timer = setTimeout(() => {
+//       if (cancelled) return
+//       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+//         new Notification('Soccer Zone FC ⚽', { body: message.slice(0, 250), icon: '/soccer-zone-logo.jpeg' })
+//       }
+//       schedule()
+//     }, target.getTime() - now.getTime())
+//   }
+//   schedule()
+//   return () => {
+//     cancelled = true
+//     clearTimeout(timer)
+//   }
+// }
 
 const WhatsAppIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
@@ -109,46 +109,46 @@ const WhatsAppIcon = () => (
   </svg>
 )
 
-const TIME_PRESETS = [
-  { label: '🌅 10:00', value: '10:00' },
-  { label: '🌆 18:00', value: '18:00' },
-  { label: '✏️ אחר', value: 'custom' },
-]
+// const TIME_PRESETS = [
+//   { label: '🌅 10:00', value: '10:00' },
+//   { label: '🌆 18:00', value: '18:00' },
+//   { label: '✏️ אחר', value: 'custom' },
+// ]
 
 const NotificationsPanel = ({ leagueName = '', teamsMsg = '', teams = [] }) => {
-  const today = new Date().toISOString().slice(0, 10)
-  const notificationSupported = typeof window !== 'undefined' && 'Notification' in window
-
   const [activeTemplateId, setActiveTemplateId] = useState(null)
   const [messageText, setMessageText] = useState('')
-  const [showScheduler, setShowScheduler] = useState(false)
-  const [reminderDate, setReminderDate] = useState(today)
-  const [reminderTimePreset, setReminderTimePreset] = useState(null)
-  const [reminderTimeCustom, setReminderTimeCustom] = useState('')
-  const [isWeekly, setIsWeekly] = useState(false)
-  const [scheduledLabel, setScheduledLabel] = useState('')
-  const [hasWeeklyReminder, setHasWeeklyReminder] = useState(
-    () => typeof window !== 'undefined' && !!localStorage.getItem(WEEKLY_REMINDER_KEY),
-  )
 
-  const reminderTime = reminderTimePreset === 'custom' ? reminderTimeCustom : (reminderTimePreset ?? '')
-  const notificationPermission = notificationSupported ? Notification.permission : 'denied'
+  // // Reminder state (commented out — reminders feature disabled)
+  // const today = new Date().toISOString().slice(0, 10)
+  // const notificationSupported = typeof window !== 'undefined' && 'Notification' in window
+  // const [showScheduler, setShowScheduler] = useState(false)
+  // const [reminderDate, setReminderDate] = useState(today)
+  // const [reminderTimePreset, setReminderTimePreset] = useState(null)
+  // const [reminderTimeCustom, setReminderTimeCustom] = useState('')
+  // const [isWeekly, setIsWeekly] = useState(false)
+  // const [scheduledLabel, setScheduledLabel] = useState('')
+  // const [hasWeeklyReminder, setHasWeeklyReminder] = useState(
+  //   () => typeof window !== 'undefined' && !!localStorage.getItem(WEEKLY_REMINDER_KEY),
+  // )
+  // const reminderTime = reminderTimePreset === 'custom' ? reminderTimeCustom : (reminderTimePreset ?? '')
+  // const notificationPermission = notificationSupported ? Notification.permission : 'denied'
 
-  // Restore weekly reminder from localStorage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem(WEEKLY_REMINDER_KEY)
-    if (!stored || !notificationSupported) return
-    try {
-      const { time, message } = JSON.parse(stored)
-      if (Notification.permission === 'granted') {
-        const cancel = scheduleWeekly(time, message)
-        return cancel
-      }
-    } catch {
-      localStorage.removeItem(WEEKLY_REMINDER_KEY)
-      setHasWeeklyReminder(false)
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // // Restore weekly reminder from localStorage on mount
+  // useEffect(() => {
+  //   const stored = localStorage.getItem(WEEKLY_REMINDER_KEY)
+  //   if (!stored || !notificationSupported) return
+  //   try {
+  //     const { time, message } = JSON.parse(stored)
+  //     if (Notification.permission === 'granted') {
+  //       const cancel = scheduleWeekly(time, message)
+  //       return cancel
+  //     }
+  //   } catch {
+  //     localStorage.removeItem(WEEKLY_REMINDER_KEY)
+  //     setHasWeeklyReminder(false)
+  //   }
+  // }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const templates = getTemplates(leagueName, teamsMsg, teams)
 
@@ -156,86 +156,21 @@ const NotificationsPanel = ({ leagueName = '', teamsMsg = '', teams = [] }) => {
     if (activeTemplateId === template.id) {
       setActiveTemplateId(null)
       setMessageText('')
-      setShowScheduler(false)
       return
     }
     setActiveTemplateId(template.id)
     setMessageText(template.message)
-    setShowScheduler(false)
-    setScheduledLabel('')
-    setReminderTimePreset(template.defaultTime ?? null)
   }
 
-  const handleSchedule = async () => {
-    if (!reminderTime) return
-    if (!notificationSupported) { alert('הדפדפן שלך לא תומך בהתראות'); return }
-    let permission = Notification.permission
-    if (permission === 'default') permission = await Notification.requestPermission()
-    if (permission !== 'granted') { alert('הרשאת התראות נדחתה. ניתן לשנות זאת בהגדרות הדפדפן.'); return }
+  // // handleSchedule (commented out — reminders feature disabled)
+  // const handleSchedule = async () => { ... }
 
-    const [h, m] = reminderTime.split(':').map(Number)
-    const target = new Date(reminderDate)
-    target.setHours(h, m, 0, 0)
-    // Auto-advance past times instead of erroring
-    if (target.getTime() <= Date.now()) {
-      target.setDate(target.getDate() + (isWeekly ? 7 : 1))
-    }
-
-    const captured = messageText
-    if (isWeekly) {
-      localStorage.setItem(WEEKLY_REMINDER_KEY, JSON.stringify({ time: reminderTime, message: captured }))
-      setHasWeeklyReminder(true)
-      scheduleWeekly(reminderTime, captured)
-      setScheduledLabel(`✓ תזכורת שבועית נקבעה ל-${reminderTime}`)
-    } else {
-      const delay = target.getTime() - Date.now()
-      setTimeout(() => {
-        new Notification('Soccer Zone FC ⚽', { body: captured.slice(0, 250), icon: '/soccer-zone-logo.jpeg' })
-      }, delay)
-      const label = target.toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-      setScheduledLabel(`✓ תזכורת נקבעה ל-${label}`)
-    }
-    setShowScheduler(false)
-  }
-
-  const handleCancelWeekly = () => {
-    localStorage.removeItem(WEEKLY_REMINDER_KEY)
-    setHasWeeklyReminder(false)
-    setScheduledLabel('')
-  }
+  // // handleCancelWeekly (commented out — reminders feature disabled)
+  // const handleCancelWeekly = () => { ... }
 
   return (
     <div className="mt-4 rounded-xl border border-dashed border-gray-300 p-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-800">📣 הודעות ותזכורות</h3>
-        <div className="flex items-center gap-2">
-          {hasWeeklyReminder ? (
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-blue-600">🔁 תזכורת שבועית פעילה</span>
-              <button
-                type="button"
-                onClick={handleCancelWeekly}
-                data-testid="notif-cancel-weekly"
-                className="text-xs text-gray-400 underline hover:text-gray-600"
-              >
-                בטל
-              </button>
-            </div>
-          ) : null}
-          {notificationSupported && notificationPermission === 'default' ? (
-            <button
-              type="button"
-              onClick={() => Notification.requestPermission()}
-              className="rounded-lg border px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
-            >
-              🔔 אפשר התראות
-            </button>
-          ) : null}
-          {notificationSupported && notificationPermission === 'granted' && !hasWeeklyReminder ? (
-            <span className="text-xs text-green-600">🔔 התראות מופעלות</span>
-          ) : null}
-        </div>
-      </div>
+      <h3 className="text-sm font-semibold text-gray-800">📣 הודעות</h3>
       <p className="mt-1 text-xs text-gray-500">בחר תבנית, ערוך את ההודעה ושלח.</p>
 
       {/* Template buttons */}
@@ -282,92 +217,24 @@ const NotificationsPanel = ({ leagueName = '', teamsMsg = '', teams = [] }) => {
               <WhatsAppIcon />
               שלח בוואטסאפ
             </button>
-            {notificationSupported ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setShowScheduler((p) => !p)
-                  setScheduledLabel('')
-                }}
-                disabled={!messageText.trim()}
-                data-testid="notif-schedule-toggle"
-                className="flex items-center gap-1.5 rounded-xl border bg-white px-4 py-2 text-sm text-gray-700 disabled:opacity-40 hover:bg-gray-50"
-              >
-                ⏰ תזכיר לי
-              </button>
-            ) : null}
-            {scheduledLabel ? <span className="text-xs text-green-700">{scheduledLabel}</span> : null}
           </div>
 
-          {/* Scheduler */}
-          {showScheduler ? (
-            <div className="space-y-3 rounded-xl border bg-gray-50 p-3" data-testid="notif-scheduler">
-              {/* Date */}
-              <div className="flex items-center gap-2">
-                <span className="shrink-0 text-sm text-gray-600">📅</span>
-                <input
-                  type="date"
-                  value={reminderDate}
-                  min={today}
-                  onChange={(e) => setReminderDate(e.target.value)}
-                  data-testid="notif-reminder-date"
-                  className="flex-1 rounded-lg border px-3 py-1.5 text-sm"
-                />
-              </div>
-
-              {/* Time presets */}
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm text-gray-600">🕐</span>
-                {TIME_PRESETS.map((preset) => (
-                  <button
-                    key={preset.value}
-                    type="button"
-                    onClick={() => setReminderTimePreset(preset.value)}
-                    data-testid={`notif-time-preset-${preset.value}`}
-                    className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
-                      reminderTimePreset === preset.value
-                        ? 'border-green-400 bg-green-50 text-green-800'
-                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-                {reminderTimePreset === 'custom' ? (
-                  <input
-                    type="time"
-                    value={reminderTimeCustom}
-                    onChange={(e) => setReminderTimeCustom(e.target.value)}
-                    data-testid="notif-time-custom"
-                    className="rounded-lg border px-3 py-1.5 text-sm"
-                    autoFocus
-                  />
-                ) : null}
-              </div>
-
-              {/* Weekly toggle */}
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={isWeekly}
-                  onChange={(e) => setIsWeekly(e.target.checked)}
-                  data-testid="notif-weekly-checkbox"
-                  className="h-4 w-4 rounded"
-                />
-                🔁 חזור כל שבוע
-              </label>
-
-              <button
-                type="button"
-                onClick={handleSchedule}
-                disabled={!reminderTime}
-                data-testid="notif-schedule-confirm"
-                className="min-h-[40px] w-full rounded-xl bg-green-600 px-4 py-2 text-sm text-white disabled:opacity-40 hover:bg-green-700"
-              >
-                קבע תזכורת
-              </button>
-            </div>
+          {/* // Scheduler UI (commented out — reminders feature disabled)
+          {notificationSupported ? (
+            <button
+              type="button"
+              onClick={() => { setShowScheduler((p) => !p); setScheduledLabel('') }}
+              disabled={!messageText.trim()}
+              data-testid="notif-schedule-toggle"
+              className="..."
+            >
+              ⏰ תזכיר לי
+            </button>
           ) : null}
+          {scheduledLabel ? <span className="text-xs text-green-700">{scheduledLabel}</span> : null}
+          {showScheduler ? (
+            <div data-testid="notif-scheduler">...</div>
+          ) : null} */}
         </div>
       ) : null}
     </div>
