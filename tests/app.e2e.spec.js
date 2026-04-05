@@ -753,8 +753,15 @@ test('admin can edit player names and session metadata', async ({ page }) => {
   await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('regular-1')
 
+  // Rename player
   await page.getByTestId('player-name-input-regular-p1').fill('נועם המעודכן')
+
+  // Edit session name via pencil toggle
+  await page.getByTestId('tournament-name-edit-pencil').click()
   await page.getByTestId('tournament-name-input').fill('מחזור פתיחה מעודכן')
+  await page.getByTestId('tournament-name-input').press('Enter')
+
+  // Edit number and date (still in the admin grid)
   await page.getByTestId('tournament-number-input').fill('11')
   await page.getByTestId('tournament-date-input').fill('2026-04-01')
 
@@ -766,7 +773,12 @@ test('admin can edit player names and session metadata', async ({ page }) => {
 
   await expect(page.getByTestId('league-select')).toHaveValue('regular-1')
   await expect(page.getByTestId('player-name-input-regular-p1')).toHaveValue('נועם המעודכן')
+
+  // Name is shown in display mode — open pencil to verify persisted value
+  await page.getByTestId('tournament-name-edit-pencil').click()
   await expect(page.getByTestId('tournament-name-input')).toHaveValue('מחזור פתיחה מעודכן')
+  await page.getByTestId('tournament-name-input').press('Escape')
+
   await expect(page.getByTestId('tournament-number-input')).toHaveValue('11')
   await expect(page.getByTestId('tournament-date-input')).toHaveValue('2026-04-01')
 })
@@ -866,8 +878,8 @@ test('admin notification panel: reminder fires at scheduled time via fake clock'
   await page.getByTestId('notif-schedule-confirm').click()
   await expect(page.getByText(/תזכורת נקבעה/)).toBeVisible()
 
-  // Advance fake clock 3 minutes — fires the 2-minute setTimeout
-  await page.clock.fastForward('3m')
+  // Advance fake clock 3 minutes (180 000 ms) — fires the 2-minute setTimeout
+  await page.clock.fastForward(180_000)
 
   const calls = await page.evaluate(() => window.__notifCalls)
   expect(calls).toHaveLength(1)
@@ -892,8 +904,8 @@ test('admin notification panel: weekly reminder saves to localStorage and shows 
   await page.getByTestId('notif-weekly-checkbox').check()
   await page.getByTestId('notif-schedule-confirm').click()
 
-  // Weekly indicator visible, cancel button present
-  await expect(page.getByText(/תזכורת שבועית/)).toBeVisible()
+  // Weekly indicator and cancel button visible
+  await expect(page.getByText('🔁 תזכורת שבועית פעילה')).toBeVisible()
   await expect(page.getByTestId('notif-cancel-weekly')).toBeVisible()
 
   // Saved to localStorage
@@ -904,7 +916,7 @@ test('admin notification panel: weekly reminder saves to localStorage and shows 
 
   // Cancel removes indicator and localStorage entry
   await page.getByTestId('notif-cancel-weekly').click()
-  await expect(page.getByText(/תזכורת שבועית/)).toHaveCount(0)
+  await expect(page.getByText('🔁 תזכורת שבועית פעילה')).toHaveCount(0)
   const cleared = await page.evaluate(() => localStorage.getItem('soccer-zone-weekly-reminder'))
   expect(cleared).toBeNull()
 })
