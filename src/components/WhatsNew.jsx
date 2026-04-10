@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import packageJson from '../../package.json'
 
-const VERSION = '1.0.9'
+const VERSION = packageJson.version
 const STORAGE_KEY = 'soccer-zone-whats-new-seen'
 
 const WhatsNew = ({ adminMode }) => {

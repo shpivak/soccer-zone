@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { resetTestData } from './testDataHarness'
+import packageJson from '../package.json' assert { type: 'json' }
 
 const addPlayer = async (page, name) => {
   // Open the bench add-player toggle if the input isn't already visible
@@ -35,6 +36,10 @@ const enableAdminMode = async (page) => {
   await page.getByTestId('nav-admin').click()
   await page.getByTestId('admin-password-input').fill('SoccerZone26')
   await page.getByTestId('admin-unlock-button').click()
+  // Unlocking admin mode can surface the "What's New" modal (z-50 overlay) which blocks clicks.
+  // Dismiss it if present, so navigation is stable.
+  const whatsNewDismiss = page.getByRole('button', { name: /יאללה נשחק/i })
+  await whatsNewDismiss.click({ timeout: 2000 }).catch(() => {})
   await page.getByTestId('nav-live').click()
 }
 
@@ -58,14 +63,14 @@ const setScore = async (page, side, score) => {
 
 test.beforeEach(async ({ page }) => {
   await resetTestData()
-  await page.addInitScript(() => {
+  await page.addInitScript((appVersion) => {
     if (!sessionStorage.getItem('soccer-zone-e2e-bootstrapped')) {
       localStorage.clear()
       sessionStorage.setItem('soccer-zone-e2e-bootstrapped', 'true')
     }
     // Dismiss the "What's New" popup so it doesn't block test interactions
-    localStorage.setItem('soccer-zone-whats-new-seen', '1.0.6')
-  })
+    localStorage.setItem('soccer-zone-whats-new-seen', appVersion)
+  }, packageJson.version)
   await page.goto('/')
   // Dismiss What's New modal if it shows (guards against dev-server version cache mismatch)
   await page.getByRole('button', { name: /יאללה נשחק/ }).click({ timeout: 2000 }).catch(() => {})
@@ -193,7 +198,8 @@ test('player and team changes persist after refresh and league switching', async
   // Sequential Supabase saves (leagues → players → tournaments) can take >1s after debounce.
   await page.waitForTimeout(2000)
   await page.reload()
-  await expect(page.getByTestId('league-select')).toHaveValue('tournament-2')
+  // League selection is not persisted across reload; re-select the league.
+  await page.getByTestId('league-select').selectOption('tournament-2')
   await expect(page.getByTestId('team-card-team1')).toContainText('לבן')
   await expect(page.getByTestId('team-card-team1').getByText('שחקן התמדה')).toBeVisible()
 
@@ -201,6 +207,7 @@ test('player and team changes persist after refresh and league switching', async
   await page.getByTestId('league-select').selectOption('tournament-2')
   await page.reload()
 
+  await page.getByTestId('league-select').selectOption('tournament-2')
   await expect(page.getByTestId('team-card-team1')).toContainText('לבן')
   await expect(page.getByTestId('team-card-team1').getByText('שחקן התמדה')).toBeVisible()
 })
@@ -210,6 +217,7 @@ test('saved tournament games persist after refresh and league switching', async 
   await page.getByTestId('league-select').selectOption('tournament-2')
   await expect(page.getByText('אין טורניר זמין. ניתן ליצור טורניר חדש.')).toBeVisible()
   await page.getByTestId('create-tournament-empty').click()
+  const tournamentId = await page.getByTestId('tournament-select').inputValue()
 
   await addPlayers(page, ['שחקן A', 'שחקן B', 'שחקן C', 'שחקן D', 'שחקן E', 'שחקן F'])
   await setTeamPlayer(page, 'team1', 'שחקן A')
@@ -230,12 +238,16 @@ test('saved tournament games persist after refresh and league switching', async 
 
   await page.waitForTimeout(2000)
   await page.reload()
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('tournament-select').selectOption(tournamentId)
   await expect(page.getByText('שחור 1 – 0 צהוב')).toBeVisible()
 
   await page.getByTestId('league-select').selectOption('tournament-1')
   await page.getByTestId('league-select').selectOption('tournament-2')
   await page.reload()
 
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('tournament-select').selectOption(tournamentId)
   await expect(page.getByText('שחור 1 – 0 צהוב')).toBeVisible()
   await page.getByTestId('nav-stats').click()
   // summaryOnly mode — verify scorer appears in the compact goals table

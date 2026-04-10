@@ -243,11 +243,12 @@ const LiveTournament = ({ adminMode }) => {
       if (exists) {
         return { games: tournament.games.map((item) => (item.id === game.id ? game : item)) }
       }
-      const gameLimit = getSessionGamesLimit(league)
-      if (tournament.games.length >= gameLimit) {
-        setGameInputMessage(labels.maxGamesMessage(gameLimit))
-        return { games: tournament.games }
-      }
+      // No game limit for now
+      // const gameLimit = getSessionGamesLimit(league)
+      // if (tournament.games.length >= gameLimit) {
+      //   setGameInputMessage(labels.maxGamesMessage(gameLimit))
+      //   return { games: tournament.games }
+      // }
       return { games: [...tournament.games, { ...game, round: tournament.games.length + 1 }] }
     })
     setEditingGame(null)
