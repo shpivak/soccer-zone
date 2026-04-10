@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test'
 import { resetTestData } from './testDataHarness'
-import packageJson from '../package.json' assert { type: 'json' }
+import { createRequire } from 'module'
+
+const require = createRequire(import.meta.url)
+const packageJson = require('../package.json')
 
 const addPlayer = async (page, name) => {
   // Open the bench add-player toggle if the input isn't already visible
