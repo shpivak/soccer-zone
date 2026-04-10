@@ -13,7 +13,6 @@ import {
   canEditTeamsInLiveMode,
   getLeagueModeLabels,
   getMaxPlayersPerTeam,
-  getSessionGamesLimit,
   getSessionDisplayName,
   getSessionLabel,
   LEAGUE_TYPES,
