@@ -1,9 +1,10 @@
 import { useState } from 'react'
+import packageJson from '../../package.json'
 
-const VERSION = '1.0.7'
+const VERSION = packageJson.version
 const STORAGE_KEY = 'soccer-zone-whats-new-seen'
 
-const WhatsNew = () => {
+const WhatsNew = ({ adminMode }) => {
   const [visible, setVisible] = useState(() => localStorage.getItem(STORAGE_KEY) !== VERSION)
 
   const dismiss = () => {
@@ -11,7 +12,7 @@ const WhatsNew = () => {
     setVisible(false)
   }
 
-  if (!visible) return null
+  if (!adminMode || !visible) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
@@ -24,23 +25,19 @@ const WhatsNew = () => {
         <ul className="space-y-2.5 text-sm text-gray-700">
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>הודעות וואטסאפ מוכנות</strong> — תבניות מוכנות לשליחה: תזכורת בוקר, סגלי היום, מערכת משחקים והודעה חופשית</span>
+            <span><strong>תיקוני DB ויציבות</strong> — פחות תקלות בטעינה ושמירת נתונים, הכל עובד ישירות מול השרת</span>
           </li>
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>מערכת משחקים עם שעות</strong> — הודעה אוטומטית עם שעות התחלה, אמוג׳י שעון וצבעי הקבוצות</span>
+            <span><strong>מחיקת ליגה</strong> — מחיקה מלאה של ליגה כולל כל השחקנים, הטורנירים והתוצאות שלה</span>
           </li>
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>בחירת טורניר להודעה</strong> — בחר לאיזה יום/סבב לשלוח ישירות מאזור הניהול</span>
+            <span><strong>סטטיסטיקות מלאות</strong> — כל שחקן עם שער או בישול מוצג בטבלה, לא רק 5 הראשונים</span>
           </li>
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>עריכת תוצאות</strong> — עריכת תוצאות ואירועי משחק קיימים ישירות מהטבלה</span>
-          </li>
-          <li className="flex gap-2">
-            <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>שיתוף וקישור ישיר</strong> — קישור לליגה וטורניר ספציפיים, שיתוף סגלים בוואטסאפ</span>
+            <span><strong>תיקוני באגים נוספים</strong> — שיפורי ביצועים ויציבות כלליים</span>
           </li>
         </ul>
         <button

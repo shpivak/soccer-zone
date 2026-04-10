@@ -49,12 +49,11 @@ const CompactMetricTable = ({ title, rows, metricLabel, metricKey }) => {
 }
 
 const PlayerStatsTable = ({ stats, leaders, summaryOnly = false }) => {
-  const topScorers = [...stats].sort((a, b) => b.goals - a.goals || b.assists - a.assists).slice(0, 5)
-  const topAssisters = [...stats].sort((a, b) => b.assists - a.assists || b.goals - a.goals).slice(0, 5)
+  const topScorers = [...stats].sort((a, b) => b.goals - a.goals || b.assists - a.assists).filter((row) => row.goals > 0)
+  const topAssisters = [...stats].sort((a, b) => b.assists - a.assists || b.goals - a.goals).filter((row) => row.assists > 0)
   const bestDefenders = [...stats]
     .filter((row) => row.gamesPlayed > 0 && row.isDefense)
     .sort((a, b) => a.defenderRatio - b.defenderRatio)
-    .slice(0, 5)
 
   return (
     <div className="space-y-4" data-testid="player-stats-summary">

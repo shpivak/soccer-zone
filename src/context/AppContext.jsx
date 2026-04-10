@@ -3,6 +3,7 @@ import { APP_CONFIG } from '../config'
 import { AppContext } from './appContextInstance'
 import { getDefaultLeagueData } from '../utils/defaultData'
 import {
+  deleteLeague,
   getActiveLeague,
   isResetAllowed,
   loadDatasetData,
@@ -177,6 +178,12 @@ export const AppProvider = ({ children }) => {
         updateLeagues((current) =>
           current.map((league) => (league.id === activeLeagueId ? { ...league, teams: [] } : league)),
         )
+      },
+      deleteActiveLeague: async () => {
+        await deleteLeague(activeDataset, activeLeagueId)
+        updatePlayers((current) => current.filter((player) => player.leagueId !== activeLeagueId))
+        updateTournaments((current) => current.filter((tournament) => tournament.leagueId !== activeLeagueId))
+        updateLeagues((current) => current.filter((league) => league.id !== activeLeagueId))
       },
       resetActiveLeagueToMockData: async () => {
         if (activeDataset !== 'test') {

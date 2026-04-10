@@ -1,6 +1,7 @@
 import { APP_CONFIG } from '../config'
 import { defaultLeagues, defaultPlayers, defaultTournaments } from './defaultData'
 import {
+  deleteLeagueFromSupabase,
   loadDatasetFromSupabase,
   resetSupabaseDataset,
   saveLeaguesToSupabase,
@@ -8,11 +9,13 @@ import {
   saveTournamentsToSupabase,
 } from './supabaseRest'
 import { getSessionCustomName, LEAGUE_TYPES } from './leagueUtils'
-import { canResetDataset, DEFAULT_DATASET, isSupabaseConfigured, resolveDataset } from './storageConfig'
-
-const ACTIVE_LEAGUE_KEY = 'soccer-zone-active-league'
-const LEGACY_PLAYERS_KEY = 'soccer-zone-players'
-const LEGACY_TOURNAMENTS_KEY = 'soccer-zone-tournaments'
+import {
+  ALLOW_PROD_WRITES,
+  canResetDataset,
+  DEFAULT_DATASET,
+  isSupabaseConfigured,
+  resolveDataset,
+} from './storageConfig'
 
 const safeParse = (value, fallback) => {
   try {
@@ -36,11 +39,8 @@ const getStorageKeys = (dataset) => ({
   tournamentsKey: `soccer-zone-${dataset}-tournaments`,
 })
 
-const getPendingStorageKeys = (dataset) => ({
-  leaguesKey: `soccer-zone-${dataset}-pending-leagues`,
-  playersKey: `soccer-zone-${dataset}-pending-players`,
-  tournamentsKey: `soccer-zone-${dataset}-pending-tournaments`,
-})
+const LEGACY_PLAYERS_KEY = 'soccer-zone-players'
+const LEGACY_TOURNAMENTS_KEY = 'soccer-zone-tournaments'
 
 const DEFAULT_LEAGUE_ID = defaultLeagues[0].id
 const legacyLeagueIdMap = {
@@ -141,14 +141,9 @@ const defaultDataByDataset = (dataset) => {
 
 export const getActiveDataset = () => DEFAULT_DATASET
 
-export const getActiveLeague = () => {
-  const leagueId = normalizeLeagueId(sessionStorage.getItem(ACTIVE_LEAGUE_KEY) ?? localStorage.getItem(ACTIVE_LEAGUE_KEY))
-  return defaultLeagues.some((league) => league.id === leagueId) ? leagueId : DEFAULT_LEAGUE_ID
-}
-
-export const setActiveLeague = (leagueId) => {
-  sessionStorage.setItem(ACTIVE_LEAGUE_KEY, leagueId)
-}
+// Active league is managed purely in React state; no browser storage involved.
+export const getActiveLeague = () => DEFAULT_LEAGUE_ID
+export const setActiveLeague = (_leagueId) => {}
 
 const normalizeLoadedData = (dataset, data) => ({
   ...(() => {
@@ -181,6 +176,7 @@ const normalizeLoadedData = (dataset, data) => ({
   })(),
 })
 
+// Fallback loader used only when Supabase is not configured (local-only mode).
 const loadDatasetDataFromLocal = (dataset) => {
   const defaults = defaultDataByDataset(dataset)
   const resolvedDataset = resolveDataset(dataset)
@@ -215,50 +211,10 @@ const loadDatasetDataFromLocal = (dataset) => {
   })
 }
 
-const savePendingLeagues = (dataset, leagues) => {
-  const { leaguesKey } = getPendingStorageKeys(resolveDataset(dataset))
-  localStorage.setItem(leaguesKey, JSON.stringify(leagues))
-}
-
-const savePendingPlayers = (dataset, players) => {
-  const { playersKey } = getPendingStorageKeys(resolveDataset(dataset))
-  localStorage.setItem(playersKey, JSON.stringify(players))
-}
-
-const savePendingTournaments = (dataset, tournaments) => {
-  const { tournamentsKey } = getPendingStorageKeys(resolveDataset(dataset))
-  localStorage.setItem(tournamentsKey, JSON.stringify(tournaments))
-}
-
-const clearPendingLeagues = (dataset) => {
-  const { leaguesKey } = getPendingStorageKeys(resolveDataset(dataset))
-  localStorage.removeItem(leaguesKey)
-}
-
-const clearPendingPlayers = (dataset) => {
-  const { playersKey } = getPendingStorageKeys(resolveDataset(dataset))
-  localStorage.removeItem(playersKey)
-}
-
-const clearPendingTournaments = (dataset) => {
-  const { tournamentsKey } = getPendingStorageKeys(resolveDataset(dataset))
-  localStorage.removeItem(tournamentsKey)
-}
-
-const clearPendingDatasetData = (dataset) => {
-  clearPendingLeagues(dataset)
-  clearPendingPlayers(dataset)
-  clearPendingTournaments(dataset)
-}
-
 export const loadDatasetData = async (dataset) => {
   const resolvedDataset = resolveDataset(dataset)
   if (isSupabaseConfigured()) {
     const data = await loadDatasetFromSupabase(resolvedDataset)
-    // Never hydrate Supabase-backed state from stale browser-local pending snapshots.
-    // Those snapshots can lag behind the live DB and would be immediately saved back,
-    // deleting newer rows from the remote dataset on app startup.
-    clearPendingDatasetData(resolvedDataset)
     return normalizeLoadedData(resolvedDataset, data)
   }
 
@@ -280,12 +236,17 @@ const saveTournamentsToLocal = (dataset, tournaments) => {
   localStorage.setItem(tournamentsKey, JSON.stringify(tournaments))
 }
 
+const assertProdWriteAllowed = (resolvedDataset) => {
+  if (resolvedDataset === 'prod' && !ALLOW_PROD_WRITES) {
+    throw new Error('Writes to prod are blocked. Set VITE_ALLOW_PROD_WRITES=true in .env.local to enable.')
+  }
+}
+
 export const saveLeagues = async (dataset, leagues) => {
   const resolvedDataset = resolveDataset(dataset)
   if (isSupabaseConfigured()) {
-    savePendingLeagues(resolvedDataset, leagues)
+    assertProdWriteAllowed(resolvedDataset)
     await saveLeaguesToSupabase(resolvedDataset, leagues)
-    clearPendingLeagues(resolvedDataset)
     return
   }
 
@@ -295,9 +256,8 @@ export const saveLeagues = async (dataset, leagues) => {
 export const savePlayers = async (dataset, players) => {
   const resolvedDataset = resolveDataset(dataset)
   if (isSupabaseConfigured()) {
-    savePendingPlayers(resolvedDataset, players)
+    assertProdWriteAllowed(resolvedDataset)
     await savePlayersToSupabase(resolvedDataset, players)
-    clearPendingPlayers(resolvedDataset)
     return
   }
 
@@ -307,13 +267,22 @@ export const savePlayers = async (dataset, players) => {
 export const saveTournaments = async (dataset, tournaments) => {
   const resolvedDataset = resolveDataset(dataset)
   if (isSupabaseConfigured()) {
-    savePendingTournaments(resolvedDataset, tournaments)
+    assertProdWriteAllowed(resolvedDataset)
     await saveTournamentsToSupabase(resolvedDataset, tournaments)
-    clearPendingTournaments(resolvedDataset)
     return
   }
 
   saveTournamentsToLocal(resolvedDataset, tournaments)
+}
+
+export const deleteLeague = async (dataset, leagueId) => {
+  const resolvedDataset = resolveDataset(dataset)
+  if (isSupabaseConfigured()) {
+    assertProdWriteAllowed(resolvedDataset)
+    await deleteLeagueFromSupabase(resolvedDataset, leagueId)
+    return
+  }
+  // Local mode: AppContext state updates handle the removal; nothing to do here.
 }
 
 export const isResetAllowed = (dataset) => canResetDataset(resolveDataset(dataset))
@@ -326,7 +295,6 @@ export const resetDatasetData = async (dataset) => {
 
   if (isSupabaseConfigured()) {
     await resetSupabaseDataset(resolvedDataset)
-    clearPendingDatasetData(resolvedDataset)
     return
   }
 
