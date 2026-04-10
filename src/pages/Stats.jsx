@@ -6,7 +6,7 @@ import { APP_CONFIG } from '../config'
 import { useAppContext } from '../hooks/useAppContext'
 import { getLeagueModeLabels, getLeagueTypeLabel, LEAGUE_TYPES } from '../utils/leagueUtils'
 import { calculateLeagueStandings, calculatePlayerStats, getLeaders } from '../utils/tournamentUtils'
-import { generateOverallShareMessage } from '../utils/shareUtils'
+import { buildLeagueShareUrl, generateOverallShareMessage } from '../utils/shareUtils'
 
 const Stats = () => {
   const { activeLeagueId, leagues, players, tournaments } = useAppContext()
@@ -22,7 +22,7 @@ const Stats = () => {
   const labels = getLeagueModeLabels(league?.type)
 
   const overallShareMsg = useMemo(
-    () => generateOverallShareMessage(stats, leaders, standings, league?.name ?? ''),
+    () => generateOverallShareMessage(stats, leaders, standings, league?.name ?? '', league ? buildLeagueShareUrl(league.id) : ''),
     [stats, leaders, standings, league],
   )
 

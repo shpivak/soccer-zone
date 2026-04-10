@@ -8,7 +8,7 @@ import {
   savePlayersToSupabase,
   saveTournamentsToSupabase,
 } from './supabaseRest'
-import { LEAGUE_TYPES } from './leagueUtils'
+import { getSessionCustomName, LEAGUE_TYPES } from './leagueUtils'
 import {
   ALLOW_PROD_WRITES,
   canResetDataset,
@@ -113,6 +113,7 @@ const migratePlayer = (player) => ({
 
 const migrateTournament = (tournament, index) => ({
   ...tournament,
+  name: tournament.name?.trim() || getSessionCustomName(tournament),
   leagueNumber: tournament.leagueNumber ?? index + 1,
   leagueId: normalizeLeagueId(tournament.leagueId),
   year: tournament.year ?? (Number((tournament.date ?? '').slice(0, 4)) || new Date().getFullYear()),

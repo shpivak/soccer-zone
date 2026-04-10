@@ -17,7 +17,12 @@ import { DEFAULT_DATASET, isSupabaseConfigured } from '../utils/storageConfig'
 
 export const AppProvider = ({ children }) => {
   const activeDataset = DEFAULT_DATASET
-  const [activeLeagueId, setActiveLeagueId] = useState(getActiveLeague())
+  const [activeLeagueId, setActiveLeagueId] = useState(() => {
+    const fromUrl = typeof window !== 'undefined'
+      ? (new URLSearchParams(window.location.search).get('league') ?? '')
+      : ''
+    return fromUrl || getActiveLeague()
+  })
   const [leagues, setLeagues] = useState([])
   const [players, setPlayers] = useState([])
   const [tournaments, setTournaments] = useState([])

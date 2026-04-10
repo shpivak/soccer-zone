@@ -9,10 +9,12 @@ import { APP_CONFIG } from '../config'
 import { useAppContext } from '../hooks/useAppContext'
 import { useTournamentEditor } from '../hooks/useTournamentEditor'
 import {
+  applySessionCustomNameToTeams,
   canEditTeamsInLiveMode,
   getLeagueModeLabels,
   getMaxPlayersPerTeam,
   getSessionGamesLimit,
+  getSessionDisplayName,
   getSessionLabel,
   LEAGUE_TYPES,
 } from '../utils/leagueUtils'
@@ -23,9 +25,11 @@ import {
   getLeaders,
 } from '../utils/tournamentUtils'
 import {
+  buildLeagueShareUrl,
   generateCombinedShareMessage,
   generateDayShareMessage,
   generateOverallShareMessage,
+  generateTeamShareMessage,
 } from '../utils/shareUtils'
 
 const getTournamentTopStats = (games, players) => {
@@ -66,6 +70,14 @@ const LiveTournament = ({ adminMode }) => {
   const [editingGame, setEditingGame] = useState(null)
   const [teamBuilderMessage, setTeamBuilderMessage] = useState('')
   const [gameInputMessage, setGameInputMessage] = useState('')
+  const [editingTournamentName, setEditingTournamentName] = useState(false)
+  const [nameEditValue, setNameEditValue] = useState('')
+  const [editingForTournamentId, setEditingForTournamentId] = useState(selectedTournamentId)
+
+  if (editingForTournamentId !== selectedTournamentId) {
+    setEditingForTournamentId(selectedTournamentId)
+    setEditingTournamentName(false)
+  }
   const labels = getLeagueModeLabels(league?.type)
   const maxPlayersPerTeam = league ? getMaxPlayersPerTeam(league) : undefined
   const isRegularSetupEditable =
@@ -94,6 +106,11 @@ const LiveTournament = ({ adminMode }) => {
     return getTournamentTopStats(selectedTournament.games, leaguePlayers)
   }, [selectedTournament, leaguePlayers])
 
+  const sessionShareUrl = useMemo(
+    () => (league && selectedTournament ? buildLeagueShareUrl(league.id, selectedTournament.id) : ''),
+    [league, selectedTournament],
+  )
+
   // Share messages
   const dayShareMsg = useMemo(() => {
     if (!selectedTournament || !league) return ''
@@ -101,21 +118,59 @@ const LiveTournament = ({ adminMode }) => {
     const dayStandings = league.type === LEAGUE_TYPES.tournament ? standings : []
     // Tournament mode: skip individual game results (only stats/standings matter)
     const includeResults = league.type !== LEAGUE_TYPES.tournament
-    return generateDayShareMessage(selectedTournament, selectedTournament.teams, leaguePlayers, league.name, dayStandings, { includeResults })
-  }, [selectedTournament, leaguePlayers, league, standings])
+    return generateDayShareMessage(selectedTournament, selectedTournament.teams, leaguePlayers, league.name, dayStandings, {
+      includeResults,
+      shareUrl: sessionShareUrl,
+    })
+  }, [selectedTournament, leaguePlayers, league, standings, sessionShareUrl])
+
+  const teamsShareMsg = useMemo(() => {
+    if (!selectedTournament || !league) return ''
+    return generateTeamShareMessage(selectedTournament, leaguePlayers, league.name, league, sessionShareUrl)
+  }, [selectedTournament, leaguePlayers, league, sessionShareUrl])
 
   const combinedShareMsg = useMemo(() => {
     if (!dayShareMsg) return ''
     // Only include team standings for regular leagues; tourney/friendly standings are per-session only
     const overallStandings = league?.type === LEAGUE_TYPES.regular ? standings : []
-    const overallMsg = generateOverallShareMessage(overallStats, overallLeaders, overallStandings, league?.name ?? '')
+    const overallMsg = generateOverallShareMessage(
+      overallStats,
+      overallLeaders,
+      overallStandings,
+      league?.name ?? '',
+      sessionShareUrl,
+    )
     return generateCombinedShareMessage(dayShareMsg, overallMsg)
-  }, [dayShareMsg, overallStats, overallLeaders, standings, league])
+  }, [dayShareMsg, overallStats, overallLeaders, standings, league, sessionShareUrl])
 
   const updateSelectedTournament = (updater) => {
     setTournaments((current) =>
       current.map((item) => (item.id === selectedTournamentId ? { ...item, ...updater(item) } : item)),
     )
+  }
+
+  const updateSelectedTournamentMeta = (field, value) => {
+    if (!adminMode || !selectedTournament) return
+    updateSelectedTournament((tournament) => {
+      if (field === 'name') {
+        return {
+          name: value,
+          teams: applySessionCustomNameToTeams(tournament.teams, value),
+        }
+      }
+      if (field === 'leagueNumber') {
+        const nextLeagueNumber = Number.parseInt(value, 10)
+        return { leagueNumber: Number.isNaN(nextLeagueNumber) ? tournament.leagueNumber : nextLeagueNumber }
+      }
+      if (field === 'date') {
+        const nextDate = value || tournament.date
+        return {
+          date: nextDate,
+          year: Number(nextDate.slice(0, 4)) || tournament.year,
+        }
+      }
+      return { [field]: value }
+    })
   }
 
   const syncRegularLeagueTeams = (updater) => {
@@ -130,7 +185,15 @@ const LiveTournament = ({ adminMode }) => {
     )
     setTournaments((current) =>
       current.map((item) =>
-        item.leagueId === league.id ? { ...item, teams: nextTeams.map((team) => ({ ...team })) } : item,
+        item.leagueId === league.id
+          ? {
+              ...item,
+              teams: applySessionCustomNameToTeams(
+                nextTeams.map((team) => ({ ...team })),
+                item.name,
+              ),
+            }
+          : item,
       ),
     )
   }
@@ -189,6 +252,11 @@ const LiveTournament = ({ adminMode }) => {
         })),
       }))
     }
+  }
+
+  const handleRenamePlayer = (playerId, name) => {
+    if (!adminMode) return
+    setPlayers((current) => current.map((player) => (player.id === playerId ? { ...player, name } : player)))
   }
 
   const handleTogglePlayerRole = (playerId, field) => {
@@ -372,8 +440,7 @@ const LiveTournament = ({ adminMode }) => {
           >
             {leagueTournaments.map((tournament) => (
               <option key={tournament.id} value={tournament.id}>
-                {league.name} {labels.selectLabel} {tournament.leagueNumber ?? '-'} / {tournament.year ?? '-'} -{' '}
-                {tournament.date}
+                {league.name} {getSessionDisplayName(tournament, league)} / {tournament.year ?? '-'} - {tournament.date}
               </option>
             ))}
           </select>
@@ -395,13 +462,56 @@ const LiveTournament = ({ adminMode }) => {
           </button>
         </div>
 
+        {/* Session name with pencil edit — admin only */}
+        {adminMode ? (
+          <div className="mt-2 flex items-center gap-2">
+            {editingTournamentName ? (
+              <input
+                autoFocus
+                value={nameEditValue}
+                onChange={(event) => setNameEditValue(event.target.value)}
+                onBlur={() => {
+                  updateSelectedTournamentMeta('name', nameEditValue)
+                  setEditingTournamentName(false)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === 'Escape') {
+                    updateSelectedTournamentMeta('name', nameEditValue)
+                    setEditingTournamentName(false)
+                  }
+                }}
+                data-testid="tournament-name-input"
+                className="flex-1 rounded-xl border px-3 py-2 text-sm"
+              />
+            ) : (
+              <>
+                <span className="flex-1 text-sm text-gray-700">{getSessionDisplayName(selectedTournament, league)}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const defaultName =
+                      selectedTournament.name ||
+                      `${getSessionDisplayName(selectedTournament, league)} / ${selectedTournament.date ?? ''}`
+                    setNameEditValue(defaultName)
+                    setEditingTournamentName(true)
+                  }}
+                  data-testid="tournament-name-edit-pencil"
+                  className="shrink-0 rounded-lg px-2 py-1 text-base text-gray-400 hover:text-gray-600"
+                >
+                  ✏️
+                </button>
+              </>
+            )}
+          </div>
+        ) : null}
+
         {/* Share buttons for this day */}
-        {selectedTournament.games.length > 0 && (
+        {selectedTournament.games.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-2">
             <ShareButton message={dayShareMsg} label="שתף תוצאות היום" name="day" />
             <ShareButton message={combinedShareMsg} label="שתף יום + סטט׳ ליגה" name="combined" />
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Game input */}
@@ -431,6 +541,7 @@ const LiveTournament = ({ adminMode }) => {
           title="הגדרת קבוצות"
           headerExtra={
             <div className="flex items-center gap-2">
+              <ShareButton message={teamsShareMsg} label="שתף סגלים" name="teams" />
               <label className="flex items-center gap-1.5 rounded-xl border px-2 py-1.5 text-xs">
                 <input
                   type="checkbox"
@@ -475,23 +586,28 @@ const LiveTournament = ({ adminMode }) => {
             onChangeTeamName={handleChangeTeamName}
             onTogglePlayerRole={handleTogglePlayerRole}
             onDeletePlayer={handleDeletePlayer}
+            onRenamePlayer={handleRenamePlayer}
             onAddPlayer={handleAddPlayer}
             allowColorEdit={false}
             allowNameEdit={isRegularSetupEditable}
+            allowPlayerNameEdit={adminMode}
           />
         </CollapsibleSection>
       ) : league.type === LEAGUE_TYPES.friendly ? (
         <CollapsibleSection
           title="בניית קבוצות ידידות"
           headerExtra={
-            <button
-              onClick={handleAddFriendlyTeam}
-              disabled={!adminMode}
-              data-testid="add-friendly-team"
-              className="min-h-[36px] rounded-xl border px-3 py-1.5 text-sm disabled:opacity-40"
-            >
-              + קבוצה
-            </button>
+            <div className="flex items-center gap-2">
+              <ShareButton message={teamsShareMsg} label="שתף סגלים" name="teams" />
+              <button
+                onClick={handleAddFriendlyTeam}
+                disabled={!adminMode}
+                data-testid="add-friendly-team"
+                className="min-h-[36px] rounded-xl border px-3 py-1.5 text-sm disabled:opacity-40"
+              >
+                + קבוצה
+              </button>
+            </div>
           }
         >
           {teamBuilderMessage ? (
@@ -509,11 +625,13 @@ const LiveTournament = ({ adminMode }) => {
             onChangeTeamColor={handleChangeTeamColor}
             onTogglePlayerRole={handleTogglePlayerRole}
             onDeletePlayer={handleDeletePlayer}
+            onRenamePlayer={handleRenamePlayer}
             onAddPlayer={handleAddPlayer}
+            allowPlayerNameEdit={adminMode}
           />
         </CollapsibleSection>
       ) : (
-        <CollapsibleSection title="בניית קבוצות">
+        <CollapsibleSection title="בניית קבוצות" headerExtra={<ShareButton message={teamsShareMsg} label="שתף סגלים" name="teams" />}>
           {teamBuilderMessage ? (
             <p data-testid="team-builder-message" className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">
               {teamBuilderMessage}
@@ -529,7 +647,9 @@ const LiveTournament = ({ adminMode }) => {
             onChangeTeamColor={handleChangeTeamColor}
             onTogglePlayerRole={handleTogglePlayerRole}
             onDeletePlayer={handleDeletePlayer}
+            onRenamePlayer={handleRenamePlayer}
             onAddPlayer={handleAddPlayer}
+            allowPlayerNameEdit={adminMode}
           />
         </CollapsibleSection>
       )}
@@ -553,7 +673,7 @@ const LiveTournament = ({ adminMode }) => {
       {tournamentTopStats && (
         <section className="rounded-2xl bg-white p-4 shadow-sm">
           <h3 className="mb-2 text-sm font-bold text-gray-700">
-            ראשי קטגוריות – {getSessionLabel(league)} זה
+            ראשי קטגוריות – {getSessionDisplayName(selectedTournament, league)}
           </h3>
           <div className="flex flex-wrap gap-4 text-sm">
             {tournamentTopStats.topScorers.length > 0 && (

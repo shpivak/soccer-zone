@@ -1,10 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { getSessionDisplayName } from './utils/leagueUtils'
 import soccerZoneLogo from './assets/soccer-zone-logo.jpeg'
 import { useAppContext } from './hooks/useAppContext'
 import LiveTournament from './pages/LiveTournament'
 import Stats from './pages/Stats'
 import WhatsNew from './components/WhatsNew'
+import NotificationsPanel from './components/NotificationsPanel'
 import { getLeagueTypeLabel, LEAGUE_TYPES } from './utils/leagueUtils'
+import { generateTeamShareMessage } from './utils/shareUtils'
 
 const ADMIN_PASSWORD = 'SoccerZone26'
 const ADMIN_SESSION_KEY = 'soccer-zone-admin-auth'
@@ -22,6 +25,18 @@ const NavTab = ({ icon, label, active, onClick, testId }) => (
   </button>
 )
 
+const getLeagueIdFromUrl = () => {
+  if (typeof window === 'undefined') return ''
+  return new URLSearchParams(window.location.search).get('league') ?? ''
+}
+
+const syncLeagueIdToUrl = (leagueId) => {
+  if (typeof window === 'undefined' || !leagueId) return
+  const url = new URL(window.location.href)
+  url.searchParams.set('league', leagueId)
+  window.history.replaceState({}, '', url)
+}
+
 function App() {
   const {
     activeDataset,
@@ -32,6 +47,8 @@ function App() {
     clearActiveLeagueData,
     deleteActiveLeague,
     leagues,
+    players,
+    tournaments,
     resetActiveLeagueToMockData,
     createLeague,
     setActiveLeagueId,
@@ -43,11 +60,59 @@ function App() {
   const [adminPasswordError, setAdminPasswordError] = useState(false)
   const [newLeagueName, setNewLeagueName] = useState('')
   const [newLeagueType, setNewLeagueType] = useState(LEAGUE_TYPES.tournament)
+  const didHydrateLeagueFromUrlRef = useRef(false)
 
   const activeLeague = useMemo(
     () => leagues.find((league) => league.id === activeLeagueId) ?? null,
     [activeLeagueId, leagues],
   )
+
+  const leaguePlayers = useMemo(
+    () => players.filter((p) => p.leagueId === activeLeagueId),
+    [players, activeLeagueId],
+  )
+
+  const leagueTournamentsForNotif = useMemo(
+    () => tournaments.filter((t) => t.leagueId === activeLeagueId),
+    [tournaments, activeLeagueId],
+  )
+
+  const [notifTournamentId, setNotifTournamentId] = useState(null)
+
+  const selectedTournamentForNotif = useMemo(() => {
+    if (notifTournamentId) {
+      const found = leagueTournamentsForNotif.find((t) => t.id === notifTournamentId)
+      if (found) return found
+    }
+    return leagueTournamentsForNotif[leagueTournamentsForNotif.length - 1] ?? null
+  }, [leagueTournamentsForNotif, notifTournamentId])
+
+  const latestTeamsShareMsg = useMemo(() => {
+    if (!selectedTournamentForNotif || !activeLeague) return ''
+    return generateTeamShareMessage(selectedTournamentForNotif, leaguePlayers, activeLeague.name, activeLeague)
+  }, [selectedTournamentForNotif, leaguePlayers, activeLeague])
+
+  const latestTeamsForFixtures = useMemo(
+    () => selectedTournamentForNotif?.teams ?? [],
+    [selectedTournamentForNotif],
+  )
+
+  useEffect(() => {
+    if (leagues.length === 0) return
+    if (didHydrateLeagueFromUrlRef.current) return
+    const leagueIdFromUrl = getLeagueIdFromUrl()
+    if (leagueIdFromUrl && leagues.some((league) => league.id === leagueIdFromUrl) && leagueIdFromUrl !== activeLeagueId) {
+      setActiveLeagueId(leagueIdFromUrl)
+      return
+    }
+    didHydrateLeagueFromUrlRef.current = true
+  }, [activeLeagueId, leagues, setActiveLeagueId])
+
+  useEffect(() => {
+    if (leagues.length === 0) return
+    if (!didHydrateLeagueFromUrlRef.current) return
+    syncLeagueIdToUrl(activeLeagueId)
+  }, [activeLeagueId, leagues])
 
   const handleAdminUnlock = () => {
     if (adminPasswordInput === ADMIN_PASSWORD) {
@@ -246,6 +311,29 @@ function App() {
                     </div>
                   </div>
                 ) : null}
+
+                {leagueTournamentsForNotif.length > 1 ? (
+                  <div className="mt-4 rounded-xl border border-dashed border-gray-300 p-3">
+                    <h3 className="text-sm font-semibold text-gray-800">📅 טורניר / סבב לשליחה</h3>
+                    <select
+                      value={notifTournamentId ?? selectedTournamentForNotif?.id ?? ''}
+                      onChange={(e) => setNotifTournamentId(e.target.value || null)}
+                      data-testid="notif-tournament-select"
+                      className="mt-2 w-full rounded-xl border px-3 py-2 text-sm"
+                    >
+                      {leagueTournamentsForNotif.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {getSessionDisplayName(t, activeLeague)} – {t.date ?? '-'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+                <NotificationsPanel
+                  leagueName={activeLeague?.name ?? ''}
+                  teamsMsg={latestTeamsShareMsg}
+                  teams={latestTeamsForFixtures}
+                />
               </>
             ) : (
               <div className="mt-3 flex flex-wrap items-center gap-2">

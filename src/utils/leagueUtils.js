@@ -55,6 +55,9 @@ const colorLabel = {
   white: 'לבן',
 }
 
+const getSessionNameFromTeams = (teams = []) =>
+  teams.find((team) => typeof team?.sessionName === 'string' && team.sessionName.trim())?.sessionName?.trim() ?? ''
+
 const numberFormatter = new Intl.NumberFormat('en', { style: 'decimal' })
 
 export const getLeagueTypeLabel = (type) => typeLabels[type] ?? type
@@ -62,6 +65,25 @@ export const getLeagueTypeLabel = (type) => typeLabels[type] ?? type
 export const getLeagueModeLabels = (type) => modeLabels[type] ?? modeLabels[LEAGUE_TYPES.tournament]
 
 export const getSessionLabel = (league) => getLeagueModeLabels(league?.type).selectLabel
+
+export const getSessionCustomName = (session) => session?.name?.trim() || getSessionNameFromTeams(session?.teams)
+
+export const getSessionDisplayName = (session, league) => {
+  const customName = getSessionCustomName(session)
+  if (customName) return customName
+  return `${getSessionLabel(league)} ${session?.leagueNumber ?? '-'}`
+}
+
+export const applySessionCustomNameToTeams = (teams = [], name) =>
+  teams.map((team) => {
+    if (!team) return team
+    if (name?.trim()) return { ...team, sessionName: name.trim() }
+    const rest = { ...team }
+    delete rest.sessionName
+    return rest
+  })
+
+export const getTeamColorLabel = (color) => colorLabel[color] ?? color ?? ''
 
 export const getTeamDisplayName = (team) => team?.name?.trim() || colorLabel[team?.color] || team?.id || '-'
 
