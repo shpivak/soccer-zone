@@ -37,6 +37,8 @@ export const ENABLE_PROD_DATASET = toBoolean(import.meta.env.VITE_ENABLE_PROD_DA
 export const ENABLE_DEV_RESET = toBoolean(import.meta.env.VITE_ENABLE_DEV_RESET, true)
 export const ENABLE_TEST_RESET = toBoolean(import.meta.env.VITE_ENABLE_TEST_RESET, true)
 export const ENABLE_PROD_RESET = toBoolean(import.meta.env.VITE_ENABLE_PROD_RESET, false)
+/** Must be explicitly true to allow any write to the prod dataset from the app. */
+export const ALLOW_PROD_WRITES = toBoolean(import.meta.env.VITE_ALLOW_PROD_WRITES, false)
 export const SUPABASE_TIMEOUT_MS = Number(import.meta.env.VITE_SUPABASE_TIMEOUT_MS ?? 10000)
 
 export const isSupabaseConfigured = () => STORAGE_PROVIDER === 'supabase' && Boolean(SUPABASE_URL && SUPABASE_ANON_KEY)

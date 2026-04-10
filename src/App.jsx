@@ -30,6 +30,7 @@ function App() {
     isLoading,
     isResetEnabled,
     clearActiveLeagueData,
+    deleteActiveLeague,
     leagues,
     resetActiveLeagueToMockData,
     createLeague,
@@ -73,6 +74,14 @@ function App() {
     await clearActiveLeagueData()
   }
 
+  const handleDeleteLeague = async () => {
+    const approved = window.confirm(
+      `למחוק לצמיתות את הליגה "${activeLeague?.name ?? activeLeagueId}" כולל כל השחקנים, הטורנירים והתוצאות שלה?\n\nפעולה זו אינה הפיכה!`,
+    )
+    if (!approved) return
+    await deleteActiveLeague()
+  }
+
   const handleResetLeagueToMockData = async () => {
     const approved = window.confirm(`לאפס את הליגה ${activeLeague?.name ?? activeLeagueId} לדאטת ה-mock המקורית?`)
     if (!approved) return
@@ -97,7 +106,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-green-50">
-      <WhatsNew />
+      <WhatsNew adminMode={adminMode} />
       {/* Compact sticky header — league selector */}
       <header className="sticky top-0 z-20 bg-white shadow-sm">
         <div className="mx-auto flex max-w-2xl items-center gap-3 px-3 py-2">
@@ -162,6 +171,14 @@ function App() {
                     className="min-h-[44px] rounded-xl bg-red-600 px-3 py-2 text-sm text-white disabled:opacity-50"
                   >
                     נקה ליגה
+                  </button>
+                  <button
+                    onClick={handleDeleteLeague}
+                    data-testid="delete-league"
+                    disabled={isLoading}
+                    className="min-h-[44px] rounded-xl bg-red-800 px-3 py-2 text-sm text-white disabled:opacity-50"
+                  >
+                    מחק ליגה
                   </button>
                   <button
                     onClick={handleResetLeagueToMockData}

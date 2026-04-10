@@ -355,6 +355,26 @@ export const saveTournamentsToSupabase = async (dataset, tournaments) => {
   await deleteRemovedRows(dataset, TOURNAMENTS_TABLE, new Set(tournaments.map((tournament) => tournament.id)))
 }
 
+export const deleteLeagueFromSupabase = async (dataset, leagueId) => {
+  const leagueFilter = `league_id=eq.${encodeURIComponent(leagueId)}`
+  // Delete dependent rows first (matches → tournaments/players → league)
+  try {
+    await request(dataset, `${MATCHES_TABLE}?${leagueFilter}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+  } catch (error) {
+    if (!isMissingTableError(error, MATCHES_TABLE)) throw error
+  }
+  await request(dataset, `${TOURNAMENTS_TABLE}?${leagueFilter}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+  await request(dataset, `${PLAYERS_TABLE}?${leagueFilter}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+  try {
+    await request(dataset, `${LEAGUES_TABLE}?id=eq.${encodeURIComponent(leagueId)}`, {
+      method: 'DELETE',
+      headers: { Prefer: 'return=minimal' },
+    })
+  } catch (error) {
+    if (!isMissingTableError(error, LEAGUES_TABLE)) throw error
+  }
+}
+
 export const resetSupabaseDataset = async (dataset) => {
   try {
     await Promise.all([

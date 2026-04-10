@@ -31,8 +31,12 @@ const getDataset = (input = process.env.SUPABASE_TARGET_DATASET || 'dev') => {
 
 const assertDatasetAllowed = (dataset, actionLabel) => {
   if (dataset === 'prod') {
-    if (process.env.ALLOW_PROD_DB_RESET === 'true') return
-    throw new Error(`${actionLabel} against prod is blocked. Set ALLOW_PROD_DB_RESET=true to override.`)
+    // Destructive resets require ALLOW_PROD_DB_RESET; regular writes require ALLOW_PROD_WRITES.
+    if (process.env.ALLOW_PROD_DB_RESET === 'true' || process.env.ALLOW_PROD_WRITES === 'true') return
+    throw new Error(
+      `${actionLabel} against prod is blocked. ` +
+        `Set ALLOW_PROD_WRITES=true (for writes/seeds) or ALLOW_PROD_DB_RESET=true (for resets) to override.`,
+    )
   }
   if (dataset === 'dev') {
     if (process.env.ALLOW_DEV_DB_RESET === 'true') return
