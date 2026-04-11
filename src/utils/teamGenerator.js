@@ -1,20 +1,19 @@
 /**
  * Balanced team generator.
+ * See docs/team-generator-algorithm.md for the full design rationale.
  *
- * Each player has:
- *   isOffense (bool), isDefense (bool)  → role: attack-only | defense-only | versatile
- *   rank ('A' | 'B' | 'C' | undefined)  → strength: A=3, B=2, C=1
+ * Strength model: A=3, B=2, C=1  →  A+C = 4 = B+B
  *
- * Goals:
- *   - Distribute players evenly across teams
- *   - Prefer 1 attack-only + 1 defense-only per team (soft)
- *   - Pair A players with C players on the same team where possible
- *   - Keep overall team strength roughly equal
- *   - Randomise so each call produces a different result
+ * Steps:
+ *  1. Distribute A players evenly via round-robin (no team gets 2 A's while another gets 0)
+ *  2. Offset each A with a C on the same team  (restores parity: A+C ≈ B+B)
+ *  3. Soft role seeding — give teams missing an attacker/defender one from the B/leftover-C pool
+ *  4. Fill remaining slots (B + leftovers) using weakest-team-first
  */
 
 const RANK_SCORE = { A: 3, B: 2, C: 1 }
 const rankScore = (player) => RANK_SCORE[player.rank ?? 'B'] ?? 2
+const teamScore = (bucket) => bucket.reduce((s, p) => s + rankScore(p), 0)
 
 const shuffle = (arr) => {
   const result = [...arr]
@@ -26,13 +25,14 @@ const shuffle = (arr) => {
 }
 
 /**
- * Pick the team index that should receive the next player.
- * Priority: fewest players → lowest score → random among ties.
- * A ±1 score tolerance prevents over-precision and adds variety.
+ * Among eligible team indices, pick the one with:
+ *   1. fewest players  (primary)
+ *   2. lowest score    (secondary)
+ *   3. random among ties within ±1 score tolerance
  */
-const pickTarget = (teamIndices, assignments) => {
+const pickWeakest = (teamIndices, assignments) => {
   const size = (i) => assignments[i].length
-  const score = (i) => assignments[i].reduce((s, p) => s + rankScore(p), 0)
+  const score = (i) => teamScore(assignments[i])
 
   const sorted = [...teamIndices].sort((a, b) => {
     const sd = size(a) - size(b)
@@ -41,70 +41,81 @@ const pickTarget = (teamIndices, assignments) => {
 
   const minSz = size(sorted[0])
   const minSc = score(sorted[0])
-  const tier = sorted.filter(
-    (i) => size(i) === minSz && score(i) <= minSc + 1,
-  )
+  const tier = sorted.filter((i) => size(i) === minSz && score(i) <= minSc + 1)
   return tier[Math.floor(Math.random() * tier.length)]
+}
+
+/** Pull the first player of a given role from a mutable pool array. */
+const pullByRole = (pool, wantAttack) => {
+  const idx = pool.findIndex((p) =>
+    wantAttack ? (p.isOffense && !p.isDefense) : (!p.isOffense && p.isDefense),
+  )
+  if (idx === -1) return null
+  return pool.splice(idx, 1)[0]
 }
 
 export const generateBalancedTeams = (players, teams) => {
   if (!players.length || !teams.length) return teams
 
-  const numTeams = teams.length
-  const totalPlayers = players.length
-  const maxSize = Math.ceil(totalPlayers / numTeams)
+  const N = teams.length
+  const maxSize = Math.ceil(players.length / N)
 
-  // ── Classify by role ──────────────────────────────────────────────
-  const attackOnly = []
-  const defenseOnly = []
-  const versatile = []
-  for (const p of players) {
-    if (p.isOffense && !p.isDefense) attackOnly.push(p)
-    else if (!p.isOffense && p.isDefense) defenseOnly.push(p)
-    else versatile.push(p) // both flags set, or neither
-  }
+  // ── Pools by rank (each shuffled for randomness) ──────────────────
+  const poolA = shuffle(players.filter((p) => (p.rank ?? 'B') === 'A'))
+  const poolB = shuffle(players.filter((p) => (p.rank ?? 'B') === 'B'))
+  const poolC = shuffle(players.filter((p) => (p.rank ?? 'B') === 'C'))
 
-  // Shuffle within each role group for randomness
-  const sAttack = shuffle(attackOnly)
-  const sDefense = shuffle(defenseOnly)
-  const sVersatile = shuffle(versatile)
-
-  // ── Initialise assignment buckets ─────────────────────────────────
-  const assignments = Array.from({ length: numTeams }, () => [])
-  const allIdx = Array.from({ length: numTeams }, (_, i) => i)
+  const assignments = Array.from({ length: N }, () => [])
+  const allIdx = Array.from({ length: N }, (_, i) => i)
   const eligible = () => allIdx.filter((i) => assignments[i].length < maxSize)
 
-  // ── Phase 1: seed one attacker per team (soft requirement) ────────
-  // Random team order so no team has a systematic advantage
-  const attackQueue = [...sAttack]
-  for (const t of shuffle([...allIdx])) {
-    if (!attackQueue.length) break
-    assignments[t].push(attackQueue.shift())
+  // ── Step 1: distribute A players evenly via round-robin ───────────
+  // Shuffle the team order so which teams get the "extra" A is random.
+  const teamOrder = shuffle([...allIdx])
+  poolA.forEach((player, i) => {
+    assignments[teamOrder[i % N]].push(player)
+  })
+
+  // ── Step 2: offset each A with a C on the same team ──────────────
+  // Teams with the most A players (highest score) go first.
+  const byScoreDesc = [...allIdx].sort((a, b) => teamScore(assignments[b]) - teamScore(assignments[a]))
+  for (const t of byScoreDesc) {
+    const aCount = assignments[t].filter((p) => (p.rank ?? 'B') === 'A').length
+    for (let k = 0; k < aCount; k++) {
+      if (!poolC.length) break
+      assignments[t].push(poolC.shift())
+    }
   }
 
-  // ── Phase 2: seed one defender per team (soft requirement) ────────
-  const defenseQueue = [...sDefense]
+  // ── Step 3: soft role seeding from B pool (and leftover C) ────────
+  // Build a mutable fill pool from B + remaining C for role hunting.
+  // We prioritise B so we don't burn C players that might balance things later.
+  const fillPool = [...poolB, ...poolC] // poolC is now leftover only
+  shuffle(fillPool)
+
+  const hasAttacker = (t) => assignments[t].some((p) => p.isOffense && !p.isDefense)
+  const hasDefender = (t) => assignments[t].some((p) => !p.isOffense && p.isDefense)
+
   for (const t of shuffle([...allIdx])) {
-    if (!defenseQueue.length) break
-    assignments[t].push(defenseQueue.shift())
+    if (assignments[t].length >= maxSize) continue
+    if (!hasAttacker(t)) {
+      const p = pullByRole(fillPool, true)
+      if (p) assignments[t].push(p)
+    }
+  }
+  for (const t of shuffle([...allIdx])) {
+    if (assignments[t].length >= maxSize) continue
+    if (!hasDefender(t)) {
+      const p = pullByRole(fillPool, false)
+      if (p) assignments[t].push(p)
+    }
   }
 
-  // ── Phase 3: rank-balanced fill ───────────────────────────────────
-  // Pool remaining players (leftover attackers/defenders + all versatile).
-  // Sort A → B → C (within each tier the order is already shuffled).
-  // Assigning strongest players first to the *weakest* teams means that
-  // by the time C players are handed out, the A-teams are the strongest
-  // → they receive C players, achieving the desired A+C pairing.
-  const rankOrder = { A: 0, B: 1, C: 2 }
-  const remaining = [...attackQueue, ...defenseQueue, ...sVersatile]
-  remaining.sort(
-    (a, b) => (rankOrder[a.rank ?? 'B'] ?? 1) - (rankOrder[b.rank ?? 'B'] ?? 1),
-  )
-
-  for (const player of remaining) {
+  // ── Step 4: fill remaining slots (weakest team first) ─────────────
+  for (const player of fillPool) {
     const targets = eligible()
     if (!targets.length) break
-    assignments[pickTarget(targets, assignments)].push(player)
+    assignments[pickWeakest(targets, assignments)].push(player)
   }
 
   // ── Map back to original team objects (preserve id / name / color) ─
