@@ -16,6 +16,7 @@ create table if not exists soccer_zone_dev.players (
   league_id text not null,
   is_offense boolean default null,
   is_defense boolean default null,
+  player_rank text default 'B',
   created_at timestamptz not null default timezone('utc', now())
 );
 

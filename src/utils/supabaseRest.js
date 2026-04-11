@@ -8,7 +8,9 @@ const MATCHES_TABLE = 'matches'
 const isMissingPlayerRoleColumnsError = (error) =>
   error instanceof Error &&
   ((error.message.includes('is_offense') && error.message.includes('column')) ||
-    (error.message.includes('is_defense') && error.message.includes('column')))
+    (error.message.includes('is_defense') && error.message.includes('column')) ||
+    (error.message.includes('player_rank') && error.message.includes('column')) ||
+    (error.message.includes('WITHIN GROUP') && error.message.includes('rank')))
 
 // null = unknown, true/false = cached result for the lifetime of the page
 let playerRoleColumnsSupported = null
@@ -46,6 +48,7 @@ const toPlayerRow = (player) => ({
   league_id: player.leagueId,
   is_offense: player.isOffense === true,
   is_defense: player.isDefense === true,
+  player_rank: player.rank ?? 'B',
 })
 
 const fromPlayerRow = (row) => ({
@@ -54,6 +57,7 @@ const fromPlayerRow = (row) => ({
   leagueId: row.league_id,
   isOffense: row.is_offense ?? null,
   isDefense: row.is_defense ?? null,
+  rank: row.player_rank ?? 'B',
 })
 
 const toTournamentRow = (tournament) => ({
@@ -211,7 +215,7 @@ export const loadDatasetFromSupabase = async (dataset) => {
       return request(dataset, `${PLAYERS_TABLE}?select=id,name,league_id&order=name.asc`)
     }
     try {
-      const rows = await request(dataset, `${PLAYERS_TABLE}?select=id,name,league_id,is_offense,is_defense&order=name.asc`)
+      const rows = await request(dataset, `${PLAYERS_TABLE}?select=id,name,league_id,is_offense,is_defense,player_rank&order=name.asc`)
       playerRoleColumnsSupported = true
       return rows
     } catch (error) {
