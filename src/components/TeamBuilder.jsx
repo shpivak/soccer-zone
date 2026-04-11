@@ -237,6 +237,7 @@ const TeamColumn = ({
   onRenamePlayer,
   onAddPlayer,
   onCleanTeams,
+  onAutoGenerate,
   allowColorEdit,
   allowNameEdit,
   allowPlayerNameEdit,
@@ -309,18 +310,34 @@ const TeamColumn = ({
         </select>
       ) : null}
 
-      {/* Clean teams button — bench only, admin only */}
-      {isBench && adminMode && onCleanTeams ? (
-        <button
-          type="button"
-          onClick={onCleanTeams}
-          disabled={disabled}
-          data-testid="clean-teams-button"
-          className="min-h-[32px] shrink-0 rounded-lg border border-orange-300 bg-orange-50 px-2 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-40"
-          title="החזר את כל השחקנים לספסל"
-        >
-          נקה קבוצות
-        </button>
+      {/* Clean + auto-generate buttons — bench only, admin only */}
+      {isBench && adminMode ? (
+        <div className="flex shrink-0 gap-1">
+          {onAutoGenerate ? (
+            <button
+              type="button"
+              onClick={onAutoGenerate}
+              disabled={disabled}
+              data-testid="auto-generate-teams-button"
+              className="min-h-[32px] rounded-lg border border-violet-300 bg-violet-50 px-2 py-1 text-xs text-violet-700 hover:bg-violet-100 disabled:opacity-40"
+              title="חלק שחקנים אוטומטית לקבוצות מאוזנות"
+            >
+              ✨
+            </button>
+          ) : null}
+          {onCleanTeams ? (
+            <button
+              type="button"
+              onClick={onCleanTeams}
+              disabled={disabled}
+              data-testid="clean-teams-button"
+              className="min-h-[32px] rounded-lg border border-orange-300 bg-orange-50 px-2 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-40"
+              title="החזר את כל השחקנים לספסל"
+            >
+              נקה
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </div>
 
@@ -370,6 +387,7 @@ const TeamBuilder = ({
   onRenamePlayer,
   onAddPlayer,
   onCleanTeams,
+  onAutoGenerate,
   allowColorEdit = true,
   allowNameEdit = false,
   allowPlayerNameEdit = false,
@@ -413,6 +431,7 @@ const TeamBuilder = ({
       onRenamePlayer={onRenamePlayer}
       onAddPlayer={onAddPlayer ?? (() => {})}
       onCleanTeams={onCleanTeams}
+      onAutoGenerate={onAutoGenerate}
       allowColorEdit={false}
       allowNameEdit={false}
       allowPlayerNameEdit={allowPlayerNameEdit}

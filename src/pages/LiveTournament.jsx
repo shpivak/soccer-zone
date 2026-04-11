@@ -23,6 +23,7 @@ import {
   calculateStandings,
   getLeaders,
 } from '../utils/tournamentUtils'
+import { generateBalancedTeams } from '../utils/teamGenerator'
 import {
   buildLeagueShareUrl,
   generateCombinedShareMessage,
@@ -357,6 +358,19 @@ const LiveTournament = ({ adminMode }) => {
     )
   }
 
+  const handleAutoGenerate = () => {
+    if (!adminMode || !league) return
+    const currentTeams =
+      league.type === LEAGUE_TYPES.regular ? league.teams ?? [] : selectedTournament?.teams ?? []
+    if (!currentTeams.length) return
+    const newTeams = generateBalancedTeams(leaguePlayers, currentTeams)
+    if (league.type === LEAGUE_TYPES.regular) {
+      syncRegularLeagueTeams(() => newTeams)
+    } else {
+      updateSelectedTournament(() => ({ teams: newTeams }))
+    }
+  }
+
   const handleCleanTeams = () => {
     if (!adminMode || !league) return
     const clearPlayers = (teams) => teams.map((team) => ({ ...team, players: [] }))
@@ -606,6 +620,7 @@ const LiveTournament = ({ adminMode }) => {
             onRenamePlayer={handleRenamePlayer}
             onAddPlayer={handleAddPlayer}
             onCleanTeams={handleCleanTeams}
+            onAutoGenerate={handleAutoGenerate}
             allowColorEdit={false}
             allowNameEdit={isRegularSetupEditable}
             allowPlayerNameEdit={adminMode}
@@ -647,6 +662,7 @@ const LiveTournament = ({ adminMode }) => {
             onRenamePlayer={handleRenamePlayer}
             onAddPlayer={handleAddPlayer}
             onCleanTeams={handleCleanTeams}
+            onAutoGenerate={handleAutoGenerate}
             allowPlayerNameEdit={adminMode}
           />
         </CollapsibleSection>
@@ -671,6 +687,7 @@ const LiveTournament = ({ adminMode }) => {
             onRenamePlayer={handleRenamePlayer}
             onAddPlayer={handleAddPlayer}
             onCleanTeams={handleCleanTeams}
+            onAutoGenerate={handleAutoGenerate}
             allowPlayerNameEdit={adminMode}
           />
         </CollapsibleSection>
