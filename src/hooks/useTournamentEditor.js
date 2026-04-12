@@ -2,12 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { APP_CONFIG } from '../config'
 import { LEAGUE_TYPES } from '../utils/leagueUtils'
 
-const splitToDefaultTeams = (playerIds) => [
-  playerIds.slice(0, 6),
-  playerIds.slice(6, 12),
-  playerIds.slice(12, 18),
-]
-
 const cloneTeams = (teams = []) =>
   teams.map((team) => ({
     ...team,
@@ -28,19 +22,17 @@ const getRegularLeagueBaseTeams = (league, sessions) => {
   return cloneTeams(league?.teams ?? [])
 }
 
-const createSessionTeams = (league, players, sessions = []) => {
+const createSessionTeams = (league, sessions = []) => {
   if (league?.type === LEAGUE_TYPES.regular) {
     return getRegularLeagueBaseTeams(league, sessions)
   }
 
-  const playerIds = players.map((player) => player.id)
-  const splitTeams = splitToDefaultTeams(playerIds)
   const teamCount = APP_CONFIG.friendly.teamsCount
   return Array.from({ length: teamCount }, (_, index) => ({
     id: `team${index + 1}`,
     color: APP_CONFIG.teamColors[index] ?? 'gray',
     name: '',
-    players: splitTeams[index] ?? [],
+    players: [],
   }))
 }
 
@@ -54,7 +46,7 @@ const createEmptySession = (id, date, players, league, sessions) => {
     leagueNumber,
     leagueId: league.id,
     year,
-    teams: createSessionTeams(league, players, sessions),
+    teams: createSessionTeams(league, sessions),
     games: [],
   }
 }

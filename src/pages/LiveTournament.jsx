@@ -23,6 +23,7 @@ import {
   calculateStandings,
   getLeaders,
 } from '../utils/tournamentUtils'
+import { generateBalancedTeams } from '../utils/teamGenerator'
 import {
   buildLeagueShareUrl,
   generateCombinedShareMessage,
@@ -350,6 +351,36 @@ const LiveTournament = ({ adminMode }) => {
     syncRegularLeagueTeams((teams) => teams.map((team) => (team.id === teamId ? { ...team, name } : team)))
   }
 
+  const handleChangePlayerRank = (playerId, rank) => {
+    if (!adminMode) return
+    setPlayers((current) =>
+      current.map((player) => (player.id === playerId ? { ...player, rank: rank ?? null } : player)),
+    )
+  }
+
+  const handleAutoGenerate = () => {
+    if (!adminMode || !league) return
+    const currentTeams =
+      league.type === LEAGUE_TYPES.regular ? league.teams ?? [] : selectedTournament?.teams ?? []
+    if (!currentTeams.length) return
+    const newTeams = generateBalancedTeams(leaguePlayers, currentTeams)
+    if (league.type === LEAGUE_TYPES.regular) {
+      syncRegularLeagueTeams(() => newTeams)
+    } else {
+      updateSelectedTournament(() => ({ teams: newTeams }))
+    }
+  }
+
+  const handleCleanTeams = () => {
+    if (!adminMode || !league) return
+    const clearPlayers = (teams) => teams.map((team) => ({ ...team, players: [] }))
+    if (league.type === LEAGUE_TYPES.regular) {
+      syncRegularLeagueTeams(clearPlayers)
+      return
+    }
+    updateSelectedTournament((tournament) => ({ teams: clearPlayers(tournament.teams) }))
+  }
+
   const handleAddRegularTeam = () => {
     if (!adminMode || !league || league.type !== LEAGUE_TYPES.regular) return
     if ((league.teams?.length ?? 0) >= APP_CONFIG.regular.maxTeams) {
@@ -583,10 +614,13 @@ const LiveTournament = ({ adminMode }) => {
             onMovePlayer={handleMovePlayer}
             onChangeTeamColor={() => {}}
             onChangeTeamName={handleChangeTeamName}
+            onChangePlayerRank={handleChangePlayerRank}
             onTogglePlayerRole={handleTogglePlayerRole}
             onDeletePlayer={handleDeletePlayer}
             onRenamePlayer={handleRenamePlayer}
             onAddPlayer={handleAddPlayer}
+            onCleanTeams={handleCleanTeams}
+            onAutoGenerate={handleAutoGenerate}
             allowColorEdit={false}
             allowNameEdit={isRegularSetupEditable}
             allowPlayerNameEdit={adminMode}
@@ -622,10 +656,13 @@ const LiveTournament = ({ adminMode }) => {
             adminMode={adminMode}
             onMovePlayer={handleMovePlayer}
             onChangeTeamColor={handleChangeTeamColor}
+            onChangePlayerRank={handleChangePlayerRank}
             onTogglePlayerRole={handleTogglePlayerRole}
             onDeletePlayer={handleDeletePlayer}
             onRenamePlayer={handleRenamePlayer}
             onAddPlayer={handleAddPlayer}
+            onCleanTeams={handleCleanTeams}
+            onAutoGenerate={handleAutoGenerate}
             allowPlayerNameEdit={adminMode}
           />
         </CollapsibleSection>
@@ -644,10 +681,13 @@ const LiveTournament = ({ adminMode }) => {
             adminMode={adminMode}
             onMovePlayer={handleMovePlayer}
             onChangeTeamColor={handleChangeTeamColor}
+            onChangePlayerRank={handleChangePlayerRank}
             onTogglePlayerRole={handleTogglePlayerRole}
             onDeletePlayer={handleDeletePlayer}
             onRenamePlayer={handleRenamePlayer}
             onAddPlayer={handleAddPlayer}
+            onCleanTeams={handleCleanTeams}
+            onAutoGenerate={handleAutoGenerate}
             allowPlayerNameEdit={adminMode}
           />
         </CollapsibleSection>
