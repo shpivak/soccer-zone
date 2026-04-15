@@ -25,19 +25,23 @@ const WhatsNew = ({ adminMode }) => {
         <ul className="space-y-2.5 text-sm text-gray-700">
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>תיקוני DB ויציבות</strong> — פחות תקלות בטעינה ושמירת נתונים, הכל עובד ישירות מול השרת</span>
+            <span><strong>ניקוד חי שורד רענון</strong> — תוצאה בהכנה נשמרת אוטומטית, לא תיעלם אם תרענן בטעות</span>
           </li>
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>מחיקת ליגה</strong> — מחיקה מלאה של ליגה כולל כל השחקנים, הטורנירים והתוצאות שלה</span>
+            <span><strong>ידידות עם 2 קבוצות</strong> — יום ידידות נפתח עם 2 קבוצות, עם אפשרות להוסיף ולהסיר קבוצות וגג 11 שחקנים לקבוצה</span>
           </li>
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>סטטיסטיקות מלאות</strong> — כל שחקן עם שער או בישול מוצג בטבלה, לא רק 5 הראשונים</span>
+            <span><strong>תאריך יום ניתן לעריכה</strong> — שינוי תאריך הטורניר ישירות מממשק הניהול</span>
           </li>
           <li className="flex gap-2">
             <span className="mt-0.5 text-green-600">✓</span>
-            <span><strong>תיקוני באגים נוספים</strong> — שיפורי ביצועים ויציבות כלליים</span>
+            <span><strong>שיתוף ללא קישורים</strong> — הודעות השיתוף נקיות ללא כתובות URL</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="mt-0.5 text-green-600">✓</span>
+            <span><strong>ליגה אחרונה נזכרת</strong> — הליגה שבחרת נשמרת ומחכה לך בפתיחה הבאה</span>
           </li>
         </ul>
         <button
