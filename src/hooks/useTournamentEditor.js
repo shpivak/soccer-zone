@@ -27,7 +27,10 @@ const createSessionTeams = (league, sessions = []) => {
     return getRegularLeagueBaseTeams(league, sessions)
   }
 
-  const teamCount = APP_CONFIG.friendly.teamsCount
+  const teamCount =
+    league?.type === LEAGUE_TYPES.friendly
+      ? APP_CONFIG.friendly.teamsCount
+      : APP_CONFIG.tournament.teamsCount
   return Array.from({ length: teamCount }, (_, index) => ({
     id: `team${index + 1}`,
     color: APP_CONFIG.teamColors[index] ?? 'gray',

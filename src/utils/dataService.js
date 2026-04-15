@@ -141,9 +141,18 @@ const defaultDataByDataset = (dataset) => {
 
 export const getActiveDataset = () => DEFAULT_DATASET
 
-// Active league is managed purely in React state; no browser storage involved.
-export const getActiveLeague = () => DEFAULT_LEAGUE_ID
-export const setActiveLeague = (_leagueId) => {}
+const ACTIVE_LEAGUE_KEY = 'soccer-zone-active-league'
+
+export const getActiveLeague = () => {
+  if (typeof window === 'undefined') return DEFAULT_LEAGUE_ID
+  return localStorage.getItem(ACTIVE_LEAGUE_KEY) || DEFAULT_LEAGUE_ID
+}
+
+export const setActiveLeague = (leagueId) => {
+  if (typeof window === 'undefined') return
+  if (leagueId) localStorage.setItem(ACTIVE_LEAGUE_KEY, leagueId)
+  else localStorage.removeItem(ACTIVE_LEAGUE_KEY)
+}
 
 const normalizeLoadedData = (dataset, data) => ({
   ...(() => {

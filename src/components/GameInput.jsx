@@ -39,17 +39,38 @@ const normalizeEditingEvents = (editingGame, teams, players) => {
   return normalized
 }
 
-const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit, message }) => {
-  const [teamA, setTeamA] = useState(editingGame?.teamA ?? teams[0]?.id ?? '')
-  const [teamB, setTeamB] = useState(editingGame?.teamB ?? teams[1]?.id ?? '')
-  const [scoreA, setScoreA] = useState(editingGame?.score.a ?? 0)
-  const [scoreB, setScoreB] = useState(editingGame?.score.b ?? 0)
-  const [events, setEvents] = useState(() => normalizeEditingEvents(editingGame, teams, players))
-  const [clockSeconds, setClockSeconds] = useState(editingGame?.clockSeconds ?? 0)
+const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit, message, persistKey }) => {
+  const storageKey = persistKey && !editingGame ? `live-score-${persistKey}` : null
+
+  const [storedState] = useState(() => {
+    if (!storageKey) return null
+    try { return JSON.parse(sessionStorage.getItem(storageKey) || 'null') } catch { return null }
+  })
+
+  const teamIds = teams.map((t) => t.id)
+  const [teamA, setTeamA] = useState(() => {
+    if (storedState?.teamA && teamIds.includes(storedState.teamA)) return storedState.teamA
+    return editingGame?.teamA ?? teams[0]?.id ?? ''
+  })
+  const [teamB, setTeamB] = useState(() => {
+    if (storedState?.teamB && teamIds.includes(storedState.teamB)) return storedState.teamB
+    return editingGame?.teamB ?? teams[1]?.id ?? ''
+  })
+  const [scoreA, setScoreA] = useState(() => storedState?.scoreA ?? editingGame?.score.a ?? 0)
+  const [scoreB, setScoreB] = useState(() => storedState?.scoreB ?? editingGame?.score.b ?? 0)
+  const [events, setEvents] = useState(() => storedState?.events ?? normalizeEditingEvents(editingGame, teams, players))
+  const [clockSeconds, setClockSeconds] = useState(() => storedState?.clockSeconds ?? editingGame?.clockSeconds ?? 0)
   const [isClockRunning, setIsClockRunning] = useState(false)
   const [clockMs, setClockMs] = useState(0)
   const [showTimer, setShowTimer] = useState(false)
-  const [matchDescription, setMatchDescription] = useState(editingGame?.description ?? '')
+  const [matchDescription, setMatchDescription] = useState(() => storedState?.matchDescription ?? editingGame?.description ?? '')
+
+  useEffect(() => {
+    if (!storageKey) return
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify({ teamA, teamB, scoreA, scoreB, events, clockSeconds, matchDescription }))
+    } catch { /* ignore */ }
+  }, [storageKey, teamA, teamB, scoreA, scoreB, events, clockSeconds, matchDescription])
 
   useEffect(() => {
     if (!isClockRunning) return undefined
@@ -80,6 +101,7 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
   )
 
   const resetForm = () => {
+    if (storageKey) try { sessionStorage.removeItem(storageKey) } catch { /* ignore */ }
     setScoreA(0)
     setScoreB(0)
     setEvents([])
