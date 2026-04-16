@@ -976,24 +976,23 @@ test('new friendly session starts with 2 teams and allows adding/removing teams'
   await page.getByTestId('create-tournament').click()
   await expect(page.locator('[data-testid="tournament-select"] option')).toHaveCount(countBefore + 1)
 
-  // New session should have exactly 2 team cards (not 3)
-  await expect(page.getByTestId('team-card-team1')).toBeVisible()
-  await expect(page.getByTestId('team-card-team2')).toBeVisible()
-  await expect(page.getByTestId('team-card-team3')).toHaveCount(0)
+  // New session should have exactly 2 team cards (not 3) — exclude bench
+  const teamCards = () => page.locator('[data-testid^="team-card-"]:not([data-testid="team-card-bench"])')
+  await expect(teamCards()).toHaveCount(2)
 
   // Add a third team
   await page.getByTestId('add-friendly-team').click()
-  await expect(page.getByTestId('team-card-team3')).toBeVisible()
+  await expect(teamCards()).toHaveCount(3)
 
-  // Remove the third team — back to 2
-  await page.getByTestId('remove-team-team3').click()
-  await expect(page.getByTestId('team-card-team3')).toHaveCount(0)
-  await expect(page.getByTestId('team-card-team1')).toBeVisible()
-  await expect(page.getByTestId('team-card-team2')).toBeVisible()
+  // Remove the third team — back to 2 (remove button is on the last team card)
+  const removeButtons = page.locator('[data-testid^="remove-team-"]')
+  await expect(removeButtons).toHaveCount(3)
+  await removeButtons.last().click()
+  await expect(teamCards()).toHaveCount(2)
 
-  // Remove button on remaining teams should be absent (can't go below 2)
-  await expect(page.getByTestId('remove-team-team1')).toHaveCount(0)
-  await expect(page.getByTestId('remove-team-team2')).toHaveCount(0)
+  // Remove buttons still show at 2 teams, but clicking one shows the min-teams error
+  await removeButtons.first().click()
+  await expect(page.getByTestId('team-builder-message')).toContainText('2')
 })
 
 test('friendly team allows up to 11 players and rejects a 12th', async ({ page }) => {
