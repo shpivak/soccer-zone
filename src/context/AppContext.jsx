@@ -92,9 +92,28 @@ export const AppProvider = ({ children }) => {
     loadData(DEFAULT_DATASET)
   }, [loadData])
 
+  const pendingTimerRef = useRef(null)
+
+  const flushSupabaseSave = useCallback(() => {
+    if (loadedDatasetRef.current !== DEFAULT_DATASET) return
+    if (!isSupabaseConfigured()) return
+    supabaseSaveChainRef.current = supabaseSaveChainRef.current
+      .then(async () => {
+        const L = leaguesRef.current
+        const P = playersRef.current
+        const T = tournamentsRef.current
+        await saveLeagues(DEFAULT_DATASET, L)
+        await savePlayers(DEFAULT_DATASET, P)
+        await saveTournaments(DEFAULT_DATASET, T)
+      })
+      .catch((saveError) => {
+        setError(saveError instanceof Error ? saveError.message : 'Failed to save data')
+      })
+  }, [])
+
   useEffect(() => {
     if (loadedDatasetRef.current !== DEFAULT_DATASET) return
- 
+
     const flushLocal = () => {
       const L = leaguesRef.current
       const P = playersRef.current
@@ -115,23 +134,35 @@ export const AppProvider = ({ children }) => {
       return
     }
 
-    const timer = window.setTimeout(() => {
-      supabaseSaveChainRef.current = supabaseSaveChainRef.current
-        .then(async () => {
-          const L = leaguesRef.current
-          const P = playersRef.current
-          const T = tournamentsRef.current
-          await saveLeagues(DEFAULT_DATASET, L)
-          await savePlayers(DEFAULT_DATASET, P)
-          await saveTournaments(DEFAULT_DATASET, T)
-        })
-        .catch((saveError) => {
-          setError(saveError instanceof Error ? saveError.message : 'Failed to save data')
-        })
+    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current)
+    pendingTimerRef.current = window.setTimeout(() => {
+      pendingTimerRef.current = null
+      flushSupabaseSave()
     }, 300)
 
-    return () => window.clearTimeout(timer)
-  }, [leagues, players, tournaments])
+    return () => {
+      if (pendingTimerRef.current) {
+        clearTimeout(pendingTimerRef.current)
+        pendingTimerRef.current = null
+      }
+    }
+  }, [leagues, players, tournaments, flushSupabaseSave])
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (!pendingTimerRef.current) return
+      clearTimeout(pendingTimerRef.current)
+      pendingTimerRef.current = null
+      if (loadedDatasetRef.current !== DEFAULT_DATASET) return
+      // Fire-and-forget — fetch uses keepalive:true so the browser completes
+      // the requests even after the page closes
+      saveLeagues(DEFAULT_DATASET, leaguesRef.current).catch(() => {})
+      savePlayers(DEFAULT_DATASET, playersRef.current).catch(() => {})
+      saveTournaments(DEFAULT_DATASET, tournamentsRef.current).catch(() => {})
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [])
 
   useEffect(() => {
     if (leagues.length === 0) return

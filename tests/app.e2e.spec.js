@@ -740,8 +740,9 @@ test('share copy button copies the combined message to clipboard', async ({ page
   expect(clipboardText).toContain('───────────────')
   // Overall section heading
   expect(clipboardText).toContain('סיכום כללי')
-  expect(clipboardText).toContain('league=tournament-3')
-  expect(clipboardText).toContain('tournament=2026-03-07-sb')
+  // Share messages must NOT contain URL params (PR #11 removed deep links from share)
+  expect(clipboardText).not.toContain('league=tournament-3')
+  expect(clipboardText).not.toContain('tournament=2026-03-07-sb')
 })
 
 test('team share copies assigned squads and deep links to the selected league and tournament', async ({ page, context }) => {
@@ -760,8 +761,9 @@ test('team share copies assigned squads and deep links to the selected league an
   expect(clipboardText).toContain('שבת B')
   expect(clipboardText).toContain('שחור')
   expect(clipboardText).toContain('יואב כהן')
-  expect(clipboardText).toContain('league=tournament-3')
-  expect(clipboardText).toContain('tournament=2026-03-07-sb')
+  // Share messages must NOT contain URL params (PR #11 removed deep links from share)
+  expect(clipboardText).not.toContain('league=tournament-3')
+  expect(clipboardText).not.toContain('tournament=2026-03-07-sb')
 })
 
 // TODO: flaky — pressing Enter on tournament-name-input occasionally triggers a page navigation
@@ -850,4 +852,261 @@ test('admin notification panel: templates render and message fills textarea', as
 
   // Scheduler toggle not present (reminders disabled)
   await expect(page.getByTestId('notif-schedule-toggle')).toHaveCount(0)
+})
+
+// ─── PR #9: delete league ─────────────────────────────────────────────────────
+
+test('delete league removes it from the league dropdown', async ({ page }) => {
+  await enableAdminMode(page)
+
+  // Count leagues before
+  const optionsBefore = await page.locator('[data-testid="league-select"] option').count()
+
+  // Create a new league so we can safely delete it without touching seed data
+  await page.getByTestId('nav-admin').click()
+  await page.getByTestId('add-league-name').fill('ליגת מחיקה')
+  await page.getByTestId('add-league-save').click()
+  await expect(page.locator('[data-testid="league-select"] option')).toHaveCount(optionsBefore + 1)
+
+  // Delete it
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByTestId('delete-league').click()
+  await expect(page.locator('[data-testid="league-select"] option')).toHaveCount(optionsBefore)
+})
+
+// ─── PR #10: rank, clean-teams, auto-generate ─────────────────────────────────
+
+test('player rank button cycles B → A → C → B and is hidden from non-admin', async ({ page }) => {
+  // Without admin — rank button should not be visible on bench players
+  await page.getByTestId('league-select').selectOption('tournament-1')
+  await page.getByTestId('tournament-select').selectOption('2026-03-01')
+
+  const anyChip = page.locator('[data-testid^="player-chip-"]').first()
+  await expect(anyChip).toBeVisible()
+  const chipId = (await anyChip.getAttribute('data-testid')).replace('player-chip-', '')
+  await expect(page.getByTestId(`player-rank-${chipId}`)).toHaveCount(0)
+
+  // With admin — rank button appears and cycles correctly
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('create-tournament-empty').click()
+  await addPlayer(page, 'שחקן דירוג')
+
+  const rankChip = page.locator('[data-testid^="player-chip-"]').filter({ hasText: 'שחקן דירוג' }).first()
+  const rankId = (await rankChip.getAttribute('data-testid')).replace('player-chip-', '')
+  const rankBtn = page.getByTestId(`player-rank-${rankId}`)
+
+  // Default rank is B
+  await expect(rankBtn).toContainText('B')
+  // B → A
+  await rankBtn.click()
+  await expect(rankBtn).toContainText('A')
+  // A → C
+  await rankBtn.click()
+  await expect(rankBtn).toContainText('C')
+  // C → B
+  await rankBtn.click()
+  await expect(rankBtn).toContainText('B')
+})
+
+test('clean teams button returns all players to bench', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('create-tournament-empty').click()
+
+  await addPlayers(page, ['שחקן נקה 1', 'שחקן נקה 2', 'שחקן נקה 3'])
+  await setTeamPlayer(page, 'team1', 'שחקן נקה 1')
+  await setTeamPlayer(page, 'team2', 'שחקן נקה 2')
+  await expect(page.getByTestId('team-card-team1').getByText('שחקן נקה 1')).toBeVisible()
+  await expect(page.getByTestId('team-card-team2').getByText('שחקן נקה 2')).toBeVisible()
+
+  await page.getByTestId('clean-teams-button').click()
+
+  // All players should be back on bench
+  await expect(page.getByTestId('team-card-bench').getByText('שחקן נקה 1')).toBeVisible()
+  await expect(page.getByTestId('team-card-bench').getByText('שחקן נקה 2')).toBeVisible()
+  await expect(page.getByTestId('team-card-bench').getByText('שחקן נקה 3')).toBeVisible()
+  // Teams should be empty
+  await expect(page.getByTestId('team-card-team1').locator('[data-testid^="player-chip-"]')).toHaveCount(0)
+  await expect(page.getByTestId('team-card-team2').locator('[data-testid^="player-chip-"]')).toHaveCount(0)
+})
+
+test('auto-generate distributes bench players across teams', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('create-tournament-empty').click()
+
+  await addPlayers(page, ['שחקן אוטו 1', 'שחקן אוטו 2', 'שחקן אוטו 3', 'שחקן אוטו 4', 'שחקן אוטו 5', 'שחקן אוטו 6'])
+
+  // All players on bench before auto-generate
+  await expect(page.getByTestId('team-card-bench').locator('[data-testid^="player-chip-"]')).toHaveCount(6)
+
+  await page.getByTestId('auto-generate-teams-button').click()
+
+  // After auto-generate bench should be empty and teams should have players
+  await expect(page.getByTestId('team-card-bench').locator('[data-testid^="player-chip-"]')).toHaveCount(0)
+  const team1Count = await page.getByTestId('team-card-team1').locator('[data-testid^="player-chip-"]').count()
+  const team2Count = await page.getByTestId('team-card-team2').locator('[data-testid^="player-chip-"]').count()
+  const team3Count = await page.getByTestId('team-card-team3').locator('[data-testid^="player-chip-"]').count()
+  expect(team1Count + team2Count + team3Count).toBe(6)
+})
+
+// ─── PR #10: role buttons admin-only ──────────────────────────────────────────
+
+test('offense and defense role buttons are hidden from non-admin', async ({ page }) => {
+  await page.getByTestId('league-select').selectOption('tournament-1')
+  await page.getByTestId('tournament-select').selectOption('2026-03-01')
+
+  const anyChip = page.locator('[data-testid^="player-chip-"]').first()
+  await expect(anyChip).toBeVisible()
+  const chipId = (await anyChip.getAttribute('data-testid')).replace('player-chip-', '')
+
+  await expect(page.getByTestId(`player-offense-${chipId}`)).toHaveCount(0)
+  await expect(page.getByTestId(`player-defense-${chipId}`)).toHaveCount(0)
+})
+
+// ─── PR #11: friendly 2 teams, add/remove, max 11 ────────────────────────────
+
+test('new friendly session starts with 2 teams and allows adding/removing teams', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('friendly-1')
+
+  // Create a new session in the friendly league
+  const countBefore = await page.locator('[data-testid="tournament-select"] option').count()
+  await page.getByTestId('create-tournament').click()
+  await expect(page.locator('[data-testid="tournament-select"] option')).toHaveCount(countBefore + 1)
+
+  // New session should have exactly 2 team cards (not 3) — exclude bench
+  const teamCards = () => page.locator('[data-testid^="team-card-"]:not([data-testid="team-card-bench"])')
+  await expect(teamCards()).toHaveCount(2)
+
+  // Add a third team
+  await page.getByTestId('add-friendly-team').click()
+  await expect(teamCards()).toHaveCount(3)
+
+  // Remove the third team — back to 2 (remove button is on the last team card)
+  const removeButtons = page.locator('[data-testid^="remove-team-"]')
+  await expect(removeButtons).toHaveCount(3)
+  await removeButtons.last().click()
+  await expect(teamCards()).toHaveCount(2)
+
+  // Remove buttons still show at 2 teams, but clicking one shows the min-teams error
+  await removeButtons.first().click()
+  await expect(page.getByTestId('team-builder-message')).toContainText('2')
+})
+
+test('friendly team allows up to 11 players and rejects a 12th', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('friendly-1')
+  await page.getByTestId('create-tournament').click()
+
+  // Add 11 players
+  for (let i = 1; i <= 11; i++) {
+    await addPlayer(page, `שחקן ידידות ${i}`)
+  }
+  for (let i = 1; i <= 11; i++) {
+    await setTeamPlayer(page, 'team1', `שחקן ידידות ${i}`)
+    await expect(page.getByTestId('team-builder-message')).toHaveCount(0)
+  }
+  await expect(page.getByTestId('team-player-count-team1')).toContainText('11/11')
+
+  // 12th player should trigger max-capacity message
+  await addPlayer(page, 'שחקן ידידות 12')
+  await setTeamPlayer(page, 'team1', 'שחקן ידידות 12')
+  await expect(page.getByTestId('team-builder-message')).toBeVisible()
+})
+
+// ─── PR #11: tournament session starts with 3 teams ──────────────────────────
+
+test('new tournament session starts with 3 teams', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('create-tournament-empty').click()
+
+  await expect(page.getByTestId('team-card-team1')).toBeVisible()
+  await expect(page.getByTestId('team-card-team2')).toBeVisible()
+  await expect(page.getByTestId('team-card-team3')).toBeVisible()
+})
+
+// ─── PR #11: tournament date picker ──────────────────────────────────────────
+
+test('tournament date can be changed via date picker and persists after reload', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('create-tournament-empty').click()
+  const tournamentId = await page.getByTestId('tournament-select').inputValue()
+
+  // Change the date
+  await page.getByTestId('tournament-date-input').fill('2026-06-15')
+  await expect(page.getByTestId('tournament-date-input')).toHaveValue('2026-06-15')
+
+  // Persist and reload
+  await page.waitForTimeout(2000)
+  await page.reload()
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('tournament-select').selectOption(tournamentId)
+  await expect(page.getByTestId('tournament-date-input')).toHaveValue('2026-06-15')
+})
+
+// ─── PR #11: active league persists across reload ────────────────────────────
+
+test('active league selection persists in localStorage across page reload', async ({ page }) => {
+  await page.getByTestId('league-select').selectOption('tournament-3')
+  await expect(page.getByTestId('league-select')).toHaveValue('tournament-3')
+
+  await page.waitForTimeout(500)
+  await page.reload()
+  await page.getByRole('button', { name: /יאללה נשחק/ }).click({ timeout: 2000 }).catch(() => {})
+
+  // The previously selected league should be restored from localStorage
+  await expect(page.getByTestId('league-select')).toHaveValue('tournament-3')
+})
+
+// ─── PR #11: live score survives page refresh ─────────────────────────────────
+
+test('in-progress live score is restored from sessionStorage after page refresh', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('tournament-3')
+  await page.getByTestId('tournament-select').selectOption('2026-03-07-sb')
+
+  // Select teams and enter a score without saving
+  await page.getByTestId('game-team-a-select').selectOption('team1')
+  await page.getByTestId('game-team-b-select').selectOption('team3')
+  await setScore(page, 'a', 2)
+  await setScore(page, 'b', 1)
+
+  // Reload without saving
+  await page.reload()
+  await page.getByRole('button', { name: /יאללה נשחק/ }).click({ timeout: 2000 }).catch(() => {})
+
+  // Score should be restored
+  await expect(page.getByTestId('score-a-input')).toHaveText('2')
+  await expect(page.getByTestId('score-b-input')).toHaveText('1')
+
+  // Selected teams should also be restored
+  await expect(page.getByTestId('game-team-a-select')).toHaveValue('team1')
+  await expect(page.getByTestId('game-team-b-select')).toHaveValue('team3')
+})
+
+// ─── PR #11: share messages contain no URLs ───────────────────────────────────
+
+test('share messages do not contain URL parameters', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+
+  await page.getByTestId('league-select').selectOption('tournament-3')
+  await page.getByTestId('tournament-select').selectOption('2026-03-07-sb')
+
+  // Day share
+  await page.getByTestId('share-copy-day').click()
+  const dayText = await page.evaluate(() => navigator.clipboard.readText())
+  expect(dayText).not.toContain('league=')
+  expect(dayText).not.toContain('tournament=')
+  expect(dayText).not.toContain('http')
+
+  // Teams share
+  await page.getByTestId('share-copy-teams').click()
+  const teamsText = await page.evaluate(() => navigator.clipboard.readText())
+  expect(teamsText).not.toContain('league=')
+  expect(teamsText).not.toContain('tournament=')
+  expect(teamsText).not.toContain('http')
 })

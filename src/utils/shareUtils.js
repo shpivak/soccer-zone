@@ -1,7 +1,7 @@
 import { getSessionDisplayName, getTeamDisplayName, LEAGUE_TYPES } from './leagueUtils'
 
 const getPlayerName = (playerId, players) => players.find((p) => p.id === playerId)?.name ?? ''
-const appendShareLink = (message, shareUrl) => (shareUrl ? `${message}\n\n🔗 ${shareUrl}` : message)
+const appendShareLink = (message) => message
 
 const colorEmoji = {
   black: '⚫',

@@ -407,6 +407,18 @@ const LiveTournament = ({ adminMode }) => {
     setSelectedTournamentId(remaining[remaining.length - 1]?.id ?? null)
   }
 
+  const handleRemoveFriendlyTeam = (teamId) => {
+    if (!adminMode || !league || league.type !== LEAGUE_TYPES.friendly || !selectedTournament) return
+    if ((selectedTournament.teams?.length ?? 0) <= 2) {
+      setTeamBuilderMessage('חייב להיות לפחות 2 קבוצות.')
+      return
+    }
+    setTeamBuilderMessage('')
+    updateSelectedTournament((tournament) => ({
+      teams: tournament.teams.filter((team) => team.id !== teamId),
+    }))
+  }
+
   const handleAddFriendlyTeam = () => {
     if (!adminMode || !league || league.type !== LEAGUE_TYPES.friendly || !selectedTournament) return
     if ((selectedTournament.teams?.length ?? 0) >= APP_CONFIG.friendly.maxTeams) {
@@ -494,44 +506,56 @@ const LiveTournament = ({ adminMode }) => {
 
         {/* Session name with pencil edit — admin only */}
         {adminMode ? (
-          <div className="mt-2 flex items-center gap-2">
-            {editingTournamentName ? (
-              <input
-                autoFocus
-                value={nameEditValue}
-                onChange={(event) => setNameEditValue(event.target.value)}
-                onBlur={() => {
-                  updateSelectedTournamentMeta('name', nameEditValue)
-                  setEditingTournamentName(false)
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === 'Escape') {
+          <div className="mt-2 space-y-2">
+            <div className="flex items-center gap-2">
+              {editingTournamentName ? (
+                <input
+                  autoFocus
+                  value={nameEditValue}
+                  onChange={(event) => setNameEditValue(event.target.value)}
+                  onBlur={() => {
                     updateSelectedTournamentMeta('name', nameEditValue)
                     setEditingTournamentName(false)
-                  }
-                }}
-                data-testid="tournament-name-input"
-                className="flex-1 rounded-xl border px-3 py-2 text-sm"
-              />
-            ) : (
-              <>
-                <span className="flex-1 text-sm text-gray-700">{getSessionDisplayName(selectedTournament, league)}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const defaultName =
-                      selectedTournament.name ||
-                      `${getSessionDisplayName(selectedTournament, league)} / ${selectedTournament.date ?? ''}`
-                    setNameEditValue(defaultName)
-                    setEditingTournamentName(true)
                   }}
-                  data-testid="tournament-name-edit-pencil"
-                  className="shrink-0 rounded-lg px-2 py-1 text-base text-gray-400 hover:text-gray-600"
-                >
-                  ✏️
-                </button>
-              </>
-            )}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === 'Escape') {
+                      updateSelectedTournamentMeta('name', nameEditValue)
+                      setEditingTournamentName(false)
+                    }
+                  }}
+                  data-testid="tournament-name-input"
+                  className="flex-1 rounded-xl border px-3 py-2 text-sm"
+                />
+              ) : (
+                <>
+                  <span className="flex-1 text-sm text-gray-700">{getSessionDisplayName(selectedTournament, league)}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const defaultName =
+                        selectedTournament.name ||
+                        `${getSessionDisplayName(selectedTournament, league)} / ${selectedTournament.date ?? ''}`
+                      setNameEditValue(defaultName)
+                      setEditingTournamentName(true)
+                    }}
+                    data-testid="tournament-name-edit-pencil"
+                    className="shrink-0 rounded-lg px-2 py-1 text-base text-gray-400 hover:text-gray-600"
+                  >
+                    ✏️
+                  </button>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="shrink-0 text-xs text-gray-500">📅 תאריך</label>
+              <input
+                type="date"
+                value={selectedTournament.date ?? ''}
+                onChange={(event) => updateSelectedTournamentMeta('date', event.target.value)}
+                data-testid="tournament-date-input"
+                className="rounded-xl border px-3 py-2 text-sm"
+              />
+            </div>
           </div>
         ) : null}
 
@@ -554,6 +578,7 @@ const LiveTournament = ({ adminMode }) => {
         editingGame={editingGame}
         onCancelEdit={() => setEditingGame(null)}
         message={gameInputMessage}
+        persistKey={selectedTournament.id}
       />
 
       {/* Live standings */}
@@ -663,6 +688,7 @@ const LiveTournament = ({ adminMode }) => {
             onAddPlayer={handleAddPlayer}
             onCleanTeams={handleCleanTeams}
             onAutoGenerate={handleAutoGenerate}
+            onRemoveTeam={handleRemoveFriendlyTeam}
             allowPlayerNameEdit={adminMode}
           />
         </CollapsibleSection>

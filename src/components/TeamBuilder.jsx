@@ -238,6 +238,7 @@ const TeamColumn = ({
   onAddPlayer,
   onCleanTeams,
   onAutoGenerate,
+  onRemoveTeam,
   allowColorEdit,
   allowNameEdit,
   allowPlayerNameEdit,
@@ -308,6 +309,20 @@ const TeamColumn = ({
             </option>
           ))}
         </select>
+      ) : null}
+
+      {/* Remove team button — non-bench, admin only, when handler provided */}
+      {!isBench && adminMode && onRemoveTeam && team ? (
+        <button
+          type="button"
+          onClick={() => onRemoveTeam(team.id)}
+          disabled={disabled}
+          data-testid={`remove-team-${team.id}`}
+          className="min-h-[32px] shrink-0 rounded-lg border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 hover:bg-red-100 disabled:opacity-40"
+          title="הסר קבוצה"
+        >
+          ✕
+        </button>
       ) : null}
 
       {/* Clean + auto-generate buttons — bench only, admin only */}
@@ -388,6 +403,7 @@ const TeamBuilder = ({
   onAddPlayer,
   onCleanTeams,
   onAutoGenerate,
+  onRemoveTeam,
   allowColorEdit = true,
   allowNameEdit = false,
   allowPlayerNameEdit = false,
@@ -457,6 +473,7 @@ const TeamBuilder = ({
       onChangePlayerRank={onChangePlayerRank}
       onRenamePlayer={onRenamePlayer}
       onAddPlayer={onAddPlayer ?? (() => {})}
+      onRemoveTeam={onRemoveTeam}
       allowColorEdit={allowColorEdit}
       allowNameEdit={allowNameEdit}
       allowPlayerNameEdit={allowPlayerNameEdit}
