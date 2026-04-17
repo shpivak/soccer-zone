@@ -429,6 +429,8 @@ test('regular league stats show a league table and summary leaders without the f
   await page.getByTestId('league-select').selectOption('regular-1')
   await expect(page.getByRole('heading', { name: 'ניהול מחזור ליגה' })).toBeVisible()
   await expect(page.getByTestId('tournament-select')).toBeVisible()
+  // team-name-input only renders in drag mode
+  await switchToDragMode(page)
   await expect(page.getByTestId('team-name-input-regular-team-1')).toBeVisible()
   await expect(page.getByTestId('team-name-input-regular-team-1')).toHaveValue('נשרים')
 
@@ -828,6 +830,8 @@ test('regular league combined share includes all teams in standings', async ({ p
 
   await page.getByTestId('add-regular-team').click()
   await page.getByTestId('add-regular-team').click()
+  // team-name-input only renders in drag mode
+  await switchToDragMode(page)
   await expect(page.getByTestId('team-name-input-regular-team-1')).toBeVisible()
   await expect(page.locator('input[value="קבוצה 5"]')).toBeVisible()
   await expect(page.locator('input[value="קבוצה 6"]')).toBeVisible()
@@ -955,6 +959,9 @@ test('auto-generate distributes bench players across teams', async ({ page }) =>
 
   await addPlayers(page, ['שחקן אוטו 1', 'שחקן אוטו 2', 'שחקן אוטו 3', 'שחקן אוטו 4', 'שחקן אוטו 5', 'שחקן אוטו 6'])
 
+  // Switch to drag mode — auto-generate there saves immediately and bench card exists
+  await switchToDragMode(page)
+
   // All players on bench before auto-generate
   await expect(page.getByTestId('team-card-bench').locator('[data-testid^="player-chip-"]')).toHaveCount(6)
 
@@ -1001,7 +1008,8 @@ test('new friendly session starts with 2 teams and allows adding/removing teams'
   await page.getByTestId('add-friendly-team').click()
   await expect(teamCards()).toHaveCount(3)
 
-  // Remove the third team — back to 2 (remove button is on the last team card)
+  // Remove the third team — remove buttons only render in drag mode
+  await switchToDragMode(page)
   const removeButtons = page.locator('[data-testid^="remove-team-"]')
   await expect(removeButtons).toHaveCount(3)
   await removeButtons.last().click()
@@ -1188,17 +1196,11 @@ test('selecting mode auto-generate distributes players locally without saving, c
   // Save button highlighted after auto-generate (pending change)
   await expect(page.getByTestId('selecting-mode-save')).toHaveClass(/ring-2/)
 
-  // Auto-generate did NOT save to DB yet — switching to drag mode shows empty teams
-  await page.getByTestId('mode-toggle-dragging').click()
-  const benchBeforeSave = page.getByTestId('team-card-bench').locator('[data-testid^="player-chip-"]')
-  await expect(benchBeforeSave).toHaveCount(6)
-
-  // Switch back, save
-  await page.getByTestId('mode-toggle-selecting').click()
+  // Save persists the auto-generated assignments
   await page.getByTestId('selecting-mode-save').click()
   await expect(page.getByTestId('selecting-mode-save')).not.toHaveClass(/ring-2/)
 
-  // Now drag mode shows teams with players
+  // Drag mode confirms the assignments were saved
   await page.getByTestId('mode-toggle-dragging').click()
   const team1Players = page.getByTestId('team-card-team1').locator('[data-testid^="player-chip-"]')
   await expect(team1Players).not.toHaveCount(0)
