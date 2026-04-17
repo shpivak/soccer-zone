@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getTeamDisplayName } from '../utils/leagueUtils'
 
-const createGoalEvent = (teamId) => ({ type: 'goal', teamId, scorer: '', assister: '' })
+const createGoalEvent = (teamId, minute) => ({
+  type: 'goal', teamId, scorer: '', assister: '',
+  ...(minute !== undefined ? { minute } : {}),
+})
 
 const inferEventTeamId = (event, teams, players, fallbackTeamId) => {
   if (event.teamId) return event.teamId
@@ -118,7 +121,7 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
     if (targetTeamId === teamA) {
       if (delta > 0) {
         setScoreA((current) => current + 1)
-        setEvents((current) => [...current, createGoalEvent(teamA)])
+        setEvents((current) => [...current, createGoalEvent(teamA, isClockRunning ? Math.floor(clockSeconds / 60) + 1 : undefined)])
       } else if (scoreA > 0) {
         setScoreA((current) => current - 1)
         setEvents((current) => {
@@ -134,7 +137,7 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
     if (targetTeamId === teamB) {
       if (delta > 0) {
         setScoreB((current) => current + 1)
-        setEvents((current) => [...current, createGoalEvent(teamB)])
+        setEvents((current) => [...current, createGoalEvent(teamB, isClockRunning ? Math.floor(clockSeconds / 60) + 1 : undefined)])
       } else if (scoreB > 0) {
         setScoreB((current) => current - 1)
         setEvents((current) => {
@@ -161,6 +164,7 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
         teamId: event.teamId,
         scorer: event.scorer,
         ...(event.assister ? { assister: event.assister } : {}),
+        ...(event.minute !== undefined ? { minute: event.minute } : {}),
       })),
     })
     resetForm()
@@ -331,22 +335,25 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
       {events.length > 0 ? (
         <div className="mt-4 space-y-2">
           <h3 className="font-semibold">אירועי שערים</h3>
-          {events.map((event, index) => {
+          {[...events].map((event, originalIndex) => ({ event, originalIndex })).reverse().map(({ event, originalIndex }) => {
             const eventPlayers = event.teamId === teamA ? teamAPlayers : teamBPlayers
             return (
-              <div key={`event-${index}`} className="grid gap-2 rounded-xl border p-2 md:grid-cols-[180px_1fr_1fr]">
-                <div className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold">
-                  {getTeamDisplayName(teams.find((team) => team.id === event.teamId))}
+              <div key={`event-${originalIndex}`} className="grid gap-2 rounded-xl border p-2 md:grid-cols-[180px_1fr_1fr]">
+                <div className="flex items-center justify-between rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold">
+                  <span>{getTeamDisplayName(teams.find((team) => team.id === event.teamId))}</span>
+                  {event.minute !== undefined ? (
+                    <span className="text-xs font-normal text-gray-500">{event.minute}'</span>
+                  ) : null}
                 </div>
                 <select
                   value={event.scorer}
                   disabled={disabled}
                   onChange={(e) => {
                     const next = [...events]
-                    next[index] = { ...next[index], scorer: e.target.value }
+                    next[originalIndex] = { ...next[originalIndex], scorer: e.target.value }
                     setEvents(next)
                   }}
-                  data-testid={`event-scorer-${index}`}
+                  data-testid={`event-scorer-${originalIndex}`}
                   className="rounded-lg border p-2"
                 >
                   <option value="">כובש (אופציונלי)</option>
@@ -361,10 +368,10 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
                   disabled={disabled}
                   onChange={(e) => {
                     const next = [...events]
-                    next[index] = { ...next[index], assister: e.target.value }
+                    next[originalIndex] = { ...next[originalIndex], assister: e.target.value }
                     setEvents(next)
                   }}
-                  data-testid={`event-assister-${index}`}
+                  data-testid={`event-assister-${originalIndex}`}
                   className="rounded-lg border p-2"
                 >
                   <option value="">מבשל (אופציונלי)</option>

@@ -37,13 +37,21 @@ const dragPlayer = async (page, playerName, targetTestId) => {
   await target.dispatchEvent('drop', { dataTransfer })
 }
 
+const switchToDragMode = async (page) => {
+  const draggingBtn = page.getByTestId('mode-toggle-dragging')
+  if (await draggingBtn.isVisible()) {
+    await draggingBtn.click()
+  }
+}
+
 const setTeamPlayer = async (page, teamId, playerName, assigned = true) => {
+  await switchToDragMode(page)
   await dragPlayer(page, playerName, assigned ? `team-card-${teamId}` : 'team-card-bench')
 }
 
 const enableAdminMode = async (page) => {
   await page.getByTestId('nav-admin').click()
-  await page.getByTestId('admin-password-input').fill('SoccerZone26')
+  await page.getByTestId('admin-password-input').fill(process.env.VITE_ADMIN_PASSWORD)
   await page.getByTestId('admin-unlock-button').click()
   // Unlocking admin mode can surface the "What's New" modal (z-50 overlay) which blocks clicks.
   // Dismiss it if present, so navigation is stable.
@@ -209,6 +217,8 @@ test('player and team changes persist after refresh and league switching', async
   await page.reload()
   // League selection is not persisted across reload; re-select the league.
   await page.getByTestId('league-select').selectOption('tournament-2')
+  // After reload the default mode is selecting — switch to drag to verify player assignments in team cards
+  await switchToDragMode(page)
   await expect(page.getByTestId('team-card-team1')).toContainText('לבן')
   await expect(page.getByTestId('team-card-team1').getByText('שחקן התמדה')).toBeVisible()
 
@@ -217,6 +227,7 @@ test('player and team changes persist after refresh and league switching', async
   await page.reload()
 
   await page.getByTestId('league-select').selectOption('tournament-2')
+  await switchToDragMode(page)
   await expect(page.getByTestId('team-card-team1')).toContainText('לבן')
   await expect(page.getByTestId('team-card-team1').getByText('שחקן התמדה')).toBeVisible()
 })
@@ -269,6 +280,7 @@ test('team builder enforces unique players, max seven players, and team color ch
   await enableAdminMode(page)
   await addPlayers(page, ['תוספת 1', 'תוספת 2'])
 
+  await switchToDragMode(page)
   await page.getByTestId('team-color-select-team1').selectOption('blue')
   await expect(page.getByTestId('team-card-team1')).toContainText('כחול')
 
@@ -417,6 +429,8 @@ test('regular league stats show a league table and summary leaders without the f
   await page.getByTestId('league-select').selectOption('regular-1')
   await expect(page.getByRole('heading', { name: 'ניהול מחזור ליגה' })).toBeVisible()
   await expect(page.getByTestId('tournament-select')).toBeVisible()
+  // team-name-input only renders in drag mode
+  await switchToDragMode(page)
   await expect(page.getByTestId('team-name-input-regular-team-1')).toBeVisible()
   await expect(page.getByTestId('team-name-input-regular-team-1')).toHaveValue('נשרים')
 
@@ -438,6 +452,8 @@ test('regular league roster editing can be enabled after round one', async ({ pa
   await expect(page.getByTestId('team-name-input-regular-team-1')).toHaveCount(0)
   await expect(page.getByTestId('regular-roster-edit-toggle')).not.toBeChecked()
 
+  // Switch to drag mode — team name inputs and bench card only render there
+  await switchToDragMode(page)
   await page.getByTestId('regular-roster-edit-toggle').check()
   await expect(page.getByTestId('team-name-input-regular-team-1')).toBeVisible()
   await expect(page.getByTestId('team-name-input-regular-team-1')).toBeEnabled()
@@ -526,6 +542,9 @@ test('bug-2: player can be deleted from bench but not from a team', async ({ pag
   await page.getByTestId('create-tournament-empty').click()
 
   await addPlayer(page, 'שחקן למחיקה')
+
+  // Switch to drag mode — bench card (team-card-bench) only renders there
+  await switchToDragMode(page)
 
   // Delete button should exist on bench player
   const benchChip = page.getByTestId('team-card-bench').locator('[data-testid^="player-chip-"]').filter({ hasText: 'שחקן למחיקה' })
@@ -811,6 +830,8 @@ test('regular league combined share includes all teams in standings', async ({ p
 
   await page.getByTestId('add-regular-team').click()
   await page.getByTestId('add-regular-team').click()
+  // team-name-input only renders in drag mode
+  await switchToDragMode(page)
   await expect(page.getByTestId('team-name-input-regular-team-1')).toBeVisible()
   await expect(page.locator('input[value="קבוצה 5"]')).toBeVisible()
   await expect(page.locator('input[value="קבוצה 6"]')).toBeVisible()
@@ -833,7 +854,7 @@ test('admin notification panel: templates render and message fills textarea', as
 
   // Unlock admin and stay on admin panel
   await page.getByTestId('nav-admin').click()
-  await page.getByTestId('admin-password-input').fill('SoccerZone26')
+  await page.getByTestId('admin-password-input').fill(process.env.VITE_ADMIN_PASSWORD)
   await page.getByTestId('admin-unlock-button').click()
 
   // All template buttons visible
@@ -938,6 +959,9 @@ test('auto-generate distributes bench players across teams', async ({ page }) =>
 
   await addPlayers(page, ['שחקן אוטו 1', 'שחקן אוטו 2', 'שחקן אוטו 3', 'שחקן אוטו 4', 'שחקן אוטו 5', 'שחקן אוטו 6'])
 
+  // Switch to drag mode — auto-generate there saves immediately and bench card exists
+  await switchToDragMode(page)
+
   // All players on bench before auto-generate
   await expect(page.getByTestId('team-card-bench').locator('[data-testid^="player-chip-"]')).toHaveCount(6)
 
@@ -984,7 +1008,8 @@ test('new friendly session starts with 2 teams and allows adding/removing teams'
   await page.getByTestId('add-friendly-team').click()
   await expect(teamCards()).toHaveCount(3)
 
-  // Remove the third team — back to 2 (remove button is on the last team card)
+  // Remove the third team — remove buttons only render in drag mode
+  await switchToDragMode(page)
   const removeButtons = page.locator('[data-testid^="remove-team-"]')
   await expect(removeButtons).toHaveCount(3)
   await removeButtons.last().click()
@@ -1109,4 +1134,80 @@ test('share messages do not contain URL parameters', async ({ page, context }) =
   expect(teamsText).not.toContain('league=')
   expect(teamsText).not.toContain('tournament=')
   expect(teamsText).not.toContain('http')
+})
+
+// ─── Selecting mode ───────────────────────────────────────────────────────────
+
+test('selecting mode is the default, cycling assigns players, save persists, drag mode preserves old behaviour', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('create-tournament-empty').click()
+  await addPlayers(page, ['שחקן 1', 'שחקן 2', 'שחקן 3', 'שחקן 4', 'שחקן 5', 'שחקן 6'])
+
+  // Default mode is selecting — toggle visible, "בחירה" button is active
+  await expect(page.getByTestId('mode-toggle-selecting')).toBeVisible()
+  await expect(page.getByTestId('mode-toggle-dragging')).toBeVisible()
+  await expect(page.getByTestId('mode-toggle-selecting')).toHaveClass(/bg-blue-600/)
+  await expect(page.getByTestId('mode-toggle-dragging')).not.toHaveClass(/bg-blue-600/)
+
+  // Flat player list visible in selecting mode
+  await expect(page.locator('[data-testid^="player-chip-"]').filter({ hasText: 'שחקן 1' })).toBeVisible()
+
+  // Initial state: all players on bench — cycle buttons show '–'
+  const cycleBtn1 = page.locator('[data-testid^="player-chip-"]').filter({ hasText: 'שחקן 1' }).locator('[data-testid^="player-team-cycle-"]')
+  await expect(cycleBtn1).toContainText('–')
+
+  // Click once: bench → team1
+  await cycleBtn1.click()
+  await expect(cycleBtn1).not.toContainText('–')
+
+  // Team1 count in summary card updates live
+  await expect(page.getByTestId('team-player-count-team1')).toContainText('1')
+
+  // Save button highlights with ring when there are unsaved changes
+  await expect(page.getByTestId('selecting-mode-save')).toHaveClass(/ring-2/)
+
+  // Saving persists the assignment
+  await page.getByTestId('selecting-mode-save').click()
+  await expect(page.getByTestId('selecting-mode-save')).not.toHaveClass(/ring-2/)
+
+  // Verify in drag mode that שחקן 1 landed in team1
+  await page.getByTestId('mode-toggle-dragging').click()
+  await expect(page.getByTestId('team-card-team1').getByText('שחקן 1')).toBeVisible()
+
+  // Switching back to selecting resets pending to the saved state
+  await page.getByTestId('mode-toggle-selecting').click()
+  const cycleBtnAgain = page.locator('[data-testid^="player-chip-"]').filter({ hasText: 'שחקן 1' }).locator('[data-testid^="player-team-cycle-"]')
+  await expect(cycleBtnAgain).not.toContainText('–')
+})
+
+test('selecting mode auto-generate distributes players locally without saving, clean resets to bench locally', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('create-tournament-empty').click()
+  await addPlayers(page, ['שחקן 1', 'שחקן 2', 'שחקן 3', 'שחקן 4', 'שחקן 5', 'שחקן 6'])
+
+  // Auto-generate: distributes all 6 players across 3 teams (2 each)
+  await page.getByTestId('auto-generate-teams-button').click()
+
+  // No cycle buttons should show '–' — all players assigned
+  await expect(page.locator('[data-testid^="player-team-cycle-"]').filter({ hasText: '–' })).toHaveCount(0)
+
+  // Save button highlighted after auto-generate (pending change)
+  await expect(page.getByTestId('selecting-mode-save')).toHaveClass(/ring-2/)
+
+  // Save persists the auto-generated assignments
+  await page.getByTestId('selecting-mode-save').click()
+  await expect(page.getByTestId('selecting-mode-save')).not.toHaveClass(/ring-2/)
+
+  // Drag mode confirms the assignments were saved
+  await page.getByTestId('mode-toggle-dragging').click()
+  const team1Players = page.getByTestId('team-card-team1').locator('[data-testid^="player-chip-"]')
+  await expect(team1Players).not.toHaveCount(0)
+
+  // Back to selecting, clean puts everyone back to bench locally
+  await page.getByTestId('mode-toggle-selecting').click()
+  await page.getByTestId('clean-teams-button').click()
+  await expect(page.locator('[data-testid^="player-team-cycle-"]').filter({ hasText: '–' })).toHaveCount(6)
+  await expect(page.getByTestId('selecting-mode-save')).toHaveClass(/ring-2/)
 })

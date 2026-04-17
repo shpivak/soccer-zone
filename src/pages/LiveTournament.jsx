@@ -381,6 +381,31 @@ const LiveTournament = ({ adminMode }) => {
     updateSelectedTournament((tournament) => ({ teams: clearPlayers(tournament.teams) }))
   }
 
+  const handleBulkMoveAll = (assignments) => {
+    if (!adminMode || !league) return
+    setTeamBuilderMessage('')
+    const applyUpdate = (teams) => {
+      const affectedIds = new Set(assignments.map((a) => a.playerId))
+      let updated = teams.map((team) => ({
+        ...team,
+        players: team.players.filter((id) => !affectedIds.has(id)),
+      }))
+      for (const { playerId, teamId } of assignments) {
+        if (teamId) {
+          updated = updated.map((team) =>
+            team.id === teamId ? { ...team, players: [...team.players, playerId] } : team,
+          )
+        }
+      }
+      return updated
+    }
+    if (league.type === LEAGUE_TYPES.regular) {
+      syncRegularLeagueTeams(applyUpdate)
+    } else {
+      updateSelectedTournament((tournament) => ({ teams: applyUpdate(tournament.teams) }))
+    }
+  }
+
   const handleAddRegularTeam = () => {
     if (!adminMode || !league || league.type !== LEAGUE_TYPES.regular) return
     if ((league.teams?.length ?? 0) >= APP_CONFIG.regular.maxTeams) {
@@ -637,6 +662,7 @@ const LiveTournament = ({ adminMode }) => {
             disabled={!adminMode || !isRegularSetupEditable}
             adminMode={adminMode}
             onMovePlayer={handleMovePlayer}
+            onBulkMoveAll={handleBulkMoveAll}
             onChangeTeamColor={() => {}}
             onChangeTeamName={handleChangeTeamName}
             onChangePlayerRank={handleChangePlayerRank}
@@ -680,6 +706,7 @@ const LiveTournament = ({ adminMode }) => {
             disabled={!adminMode}
             adminMode={adminMode}
             onMovePlayer={handleMovePlayer}
+            onBulkMoveAll={handleBulkMoveAll}
             onChangeTeamColor={handleChangeTeamColor}
             onChangePlayerRank={handleChangePlayerRank}
             onTogglePlayerRole={handleTogglePlayerRole}
@@ -706,6 +733,7 @@ const LiveTournament = ({ adminMode }) => {
             disabled={!adminMode}
             adminMode={adminMode}
             onMovePlayer={handleMovePlayer}
+            onBulkMoveAll={handleBulkMoveAll}
             onChangeTeamColor={handleChangeTeamColor}
             onChangePlayerRank={handleChangePlayerRank}
             onTogglePlayerRole={handleTogglePlayerRole}
