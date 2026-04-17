@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { APP_CONFIG } from '../config'
 import { getTeamDisplayName } from '../utils/leagueUtils'
+import { generateBalancedTeams } from '../utils/teamGenerator'
 
 const colorLabel = {
   black: 'שחור',
@@ -29,6 +30,28 @@ const rankClass = {
   A: 'bg-amber-100 text-amber-800',
   B: 'bg-sky-100 text-sky-800',
   C: 'bg-gray-100 text-gray-600',
+}
+
+// Team assignment cycling button — mirrors colorClass exactly, adds text color
+const teamBtnColorClass = {
+  black: 'bg-gray-200 border-gray-500 text-gray-800',
+  yellow: 'bg-yellow-50 border-yellow-300 text-yellow-900',
+  pink: 'bg-pink-50 border-pink-300 text-pink-900',
+  orange: 'bg-orange-50 border-orange-300 text-orange-900',
+  blue: 'bg-blue-50 border-blue-300 text-blue-900',
+  gray: 'bg-gray-50 border-gray-300 text-gray-700',
+  white: 'bg-white border-gray-300 text-gray-700',
+}
+
+const computeAssignments = (teams, players) => {
+  const map = new Map()
+  players.forEach((p) => map.set(p.id, null))
+  teams.forEach((team) => {
+    team.players.forEach((playerId) => {
+      if (map.has(playerId)) map.set(playerId, team.id)
+    })
+  })
+  return map
 }
 
 const PlayerChip = ({
@@ -387,6 +410,247 @@ const TeamColumn = ({
   </div>
 )
 
+// Selecting mode: flat player list with inline team-cycling buttons
+const SelectingView = ({
+  teams,
+  players,
+  maxPlayersPerTeam,
+  disabled,
+  adminMode,
+  onBulkMoveAll,
+  onAddPlayer,
+  onDeletePlayer,
+  onChangePlayerRank,
+  onTogglePlayerRole,
+}) => {
+  const [pendingAssignments, setPendingAssignments] = useState(() => computeAssignments(teams, players))
+  const [hasChanges, setHasChanges] = useState(false)
+
+  // Options for cycling: null (bench) then each team id
+  const teamOptions = [null, ...teams.map((t) => t.id)]
+
+  const getEffectiveTeamId = (playerId) => pendingAssignments.get(playerId) ?? null
+
+  const cycleTeam = (playerId) => {
+    const current = getEffectiveTeamId(playerId)
+    const idx = teamOptions.indexOf(current)
+    const next = teamOptions[(idx + 1) % teamOptions.length]
+    setPendingAssignments((prev) => new Map(prev).set(playerId, next))
+    setHasChanges(true)
+  }
+
+  const handleAutoGenerate = () => {
+    const newTeams = generateBalancedTeams(players, teams)
+    setPendingAssignments(computeAssignments(newTeams, players))
+    setHasChanges(true)
+  }
+
+  const handleClean = () => {
+    setPendingAssignments(computeAssignments(teams.map((t) => ({ ...t, players: [] })), players))
+    setHasChanges(true)
+  }
+
+  const pendingCountByTeam = useMemo(() => {
+    const counts = new Map(teams.map((t) => [t.id, 0]))
+    players.forEach((p) => {
+      const teamId = getEffectiveTeamId(p.id)
+      if (teamId) counts.set(teamId, (counts.get(teamId) ?? 0) + 1)
+    })
+    return counts
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAssignments, teams, players])
+
+  const benchCount = players.filter((p) => !getEffectiveTeamId(p.id)).length
+
+  const handleSave = () => {
+    const assignments = players.map((p) => ({
+      playerId: p.id,
+      teamId: getEffectiveTeamId(p.id),
+    }))
+    onBulkMoveAll(assignments)
+    setHasChanges(false)
+  }
+
+  const currentRankOf = (player) => player.rank ?? 'B'
+
+  const cycleRank = (player) => {
+    const idx = RANKS.indexOf(currentRankOf(player))
+    const next = RANKS[(idx + 1) % RANKS.length]
+    onChangePlayerRank?.(player.id, next)
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Team summary cards — collapsed view */}
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+        {teams.map((team) => {
+          const count = pendingCountByTeam.get(team.id) ?? 0
+          const overMax = maxPlayersPerTeam && count >= maxPlayersPerTeam
+          return (
+            <div
+              key={team.id}
+              className={`rounded-xl border p-2 ${colorClass[team.color] ?? 'bg-gray-50 border-gray-300'}`}
+              data-testid={`team-card-${team.id}`}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <span className="min-w-0 truncate text-sm font-semibold">{getTeamDisplayName(team)}</span>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${overMax ? 'bg-red-100 text-red-700' : 'bg-white/70 text-gray-600'}`}
+                  data-testid={`team-player-count-${team.id}`}
+                >
+                  {count}{maxPlayersPerTeam ? `/${maxPlayersPerTeam}` : ''}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+        {/* Bench summary */}
+        <div className="rounded-xl border border-gray-200 bg-white p-2">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-sm font-semibold text-gray-600">ספסל</span>
+            <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+              {benchCount}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Flat player list */}
+      <div className="space-y-2">
+        {players.map((player) => {
+          const currentTeamId = getEffectiveTeamId(player.id)
+          const currentTeam = teams.find((t) => t.id === currentTeamId) ?? null
+          const teamLabel = currentTeam ? getTeamDisplayName(currentTeam).slice(0, 4) : '–'
+          const teamBtnClass = currentTeam
+            ? (teamBtnColorClass[currentTeam.color] ?? 'bg-gray-100 border-gray-300 text-gray-600')
+            : 'bg-gray-100 border-gray-200 text-gray-500'
+
+          return (
+            <div
+              key={player.id}
+              className="flex items-center gap-2 rounded-xl border bg-white p-2 text-sm shadow-sm"
+              data-testid={`player-chip-${player.id}`}
+            >
+              {/* Delete button — only for bench players in admin mode */}
+              {!currentTeamId && adminMode && onDeletePlayer ? (
+                <button
+                  type="button"
+                  onClick={() => onDeletePlayer(player.id)}
+                  disabled={disabled}
+                  className="min-h-[32px] min-w-[32px] shrink-0 rounded-md bg-red-100 px-1.5 py-1 text-xs text-red-700"
+                  data-testid={`player-delete-${player.id}`}
+                >
+                  ✕
+                </button>
+              ) : null}
+
+              <span className="min-w-0 flex-1 truncate leading-tight">{player.name}</span>
+
+              {/* Admin: rank + roles */}
+              {adminMode ? (
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => cycleRank(player)}
+                    className={`min-h-[32px] min-w-[28px] rounded-md px-1.5 py-1 text-xs font-bold ${rankClass[currentRankOf(player)] ?? 'bg-gray-100 text-gray-600'}`}
+                    data-testid={`player-rank-${player.id}`}
+                    title="דירוג שחקן (A/B/C)"
+                  >
+                    {currentRankOf(player)}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onTogglePlayerRole?.(player.id, 'isOffense')}
+                    className={`min-h-[32px] min-w-[32px] rounded-md px-1.5 py-1 text-xs ${player.isOffense ? 'bg-emerald-100' : 'bg-gray-100'}`}
+                    data-testid={`player-offense-${player.id}`}
+                  >
+                    ⚔
+                  </button>
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onTogglePlayerRole?.(player.id, 'isDefense')}
+                    className={`min-h-[32px] min-w-[32px] rounded-md px-1.5 py-1 text-xs ${player.isDefense ? 'bg-sky-100' : 'bg-gray-100'}`}
+                    data-testid={`player-defense-${player.id}`}
+                  >
+                    🛡
+                  </button>
+                </div>
+              ) : null}
+
+              {/* Team cycling button */}
+              <button
+                type="button"
+                onClick={() => cycleTeam(player.id)}
+                disabled={disabled}
+                className={`min-h-[32px] min-w-[44px] shrink-0 rounded-md border px-1.5 py-1 text-xs font-bold transition-colors ${teamBtnClass}`}
+                title={currentTeam ? getTeamDisplayName(currentTeam) : 'ספסל'}
+                data-testid={`player-team-cycle-${player.id}`}
+              >
+                {teamLabel}
+              </button>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Add player + utility buttons */}
+      {adminMode ? (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleAutoGenerate}
+            disabled={disabled}
+            data-testid="auto-generate-teams-button"
+            className="min-h-[36px] rounded-lg border border-violet-300 bg-violet-50 px-3 py-1 text-xs text-violet-700 hover:bg-violet-100 disabled:opacity-40"
+            title="חלק שחקנים אוטומטית לקבוצות מאוזנות"
+          >
+            ✨ אוטו
+          </button>
+          <button
+            type="button"
+            onClick={handleClean}
+            disabled={disabled}
+            data-testid="clean-teams-button"
+            className="min-h-[36px] rounded-lg border border-orange-300 bg-orange-50 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-40"
+            title="החזר את כל השחקנים לספסל"
+          >
+            נקה
+          </button>
+        </div>
+      ) : null}
+
+      {adminMode ? <BenchAddRow onAddPlayer={onAddPlayer} /> : null}
+
+      {/* Save button + unsaved-changes hint */}
+      {adminMode ? (
+        <div className="space-y-1">
+          {hasChanges ? (
+            <p className="text-center text-xs text-amber-600">יש שינויים שלא נשמרו — לחץ שמור</p>
+          ) : (
+            <p className="text-center text-xs text-gray-400">לחץ שמור לאחר ביצוע שינויים</p>
+          )}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={disabled}
+            data-testid="selecting-mode-save"
+            className={`min-h-[44px] w-full rounded-xl px-4 py-2 text-sm font-semibold text-white transition-all disabled:opacity-40 ${
+              hasChanges
+                ? 'bg-green-500 shadow-md ring-2 ring-green-400 ring-offset-1 hover:bg-green-600'
+                : 'bg-green-600 hover:bg-green-700'
+            }`}
+          >
+            שמור
+          </button>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 const TeamBuilder = ({
   teams,
   players,
@@ -394,6 +658,7 @@ const TeamBuilder = ({
   disabled,
   adminMode,
   onMovePlayer,
+  onBulkMoveAll,
   onChangeTeamColor,
   onChangeTeamName,
   onTogglePlayerRole,
@@ -408,8 +673,16 @@ const TeamBuilder = ({
   allowNameEdit = false,
   allowPlayerNameEdit = false,
 }) => {
+  const [mode, setMode] = useState('selecting')
+  // Key incremented when switching to selecting to reset pending state
+  const [selectingKey, setSelectingKey] = useState(0)
   const [collapsedTeams, setCollapsedTeams] = useState(new Set())
   const [benchCollapsed, setBenchCollapsed] = useState(false)
+
+  const switchToSelecting = () => {
+    setSelectingKey((k) => k + 1)
+    setMode('selecting')
+  }
 
   const toggleTeamCollapse = (teamId) => {
     setCollapsedTeams((prev) => {
@@ -434,6 +707,50 @@ const TeamBuilder = ({
   const assignedPlayerIds = new Set(teams.flatMap((team) => team.players))
   const benchPlayers = players.filter((player) => !assignedPlayerIds.has(player.id))
 
+  // Mode toggle — shown when there are teams
+  const modeToggle = teams.length > 0 ? (
+    <div className="mb-3 flex overflow-hidden rounded-xl border border-gray-200 text-sm" role="group" aria-label="מצב עריכה">
+      <button
+        type="button"
+        onClick={switchToSelecting}
+        data-testid="mode-toggle-selecting"
+        className={`flex-1 px-3 py-2 transition-colors ${mode === 'selecting' ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+      >
+        בחירה
+      </button>
+      <button
+        type="button"
+        onClick={() => setMode('dragging')}
+        data-testid="mode-toggle-dragging"
+        className={`flex-1 px-3 py-2 transition-colors ${mode === 'dragging' ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+      >
+        גרירה
+      </button>
+    </div>
+  ) : null
+
+  if (mode === 'selecting') {
+    return (
+      <div>
+        {modeToggle}
+        <SelectingView
+          key={selectingKey}
+          teams={teams}
+          players={players}
+          maxPlayersPerTeam={maxPlayersPerTeam}
+          disabled={disabled}
+          adminMode={adminMode}
+          onBulkMoveAll={onBulkMoveAll ?? (() => {})}
+          onAddPlayer={onAddPlayer ?? (() => {})}
+          onDeletePlayer={onDeletePlayer}
+          onChangePlayerRank={onChangePlayerRank}
+          onTogglePlayerRole={onTogglePlayerRole}
+        />
+      </div>
+    )
+  }
+
+  // Dragging mode — original layout
   const benchColumn = (
     <TeamColumn
       title="שחקנים פנויים"
@@ -483,24 +800,28 @@ const TeamBuilder = ({
   ))
 
   if (benchCollapsed) {
-    // Bench collapsed: small strip on top, teams in free-flowing cube grid below
     return (
-      <div className="space-y-3">
-        {benchColumn}
-        <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
-          {teamCards}
+      <div>
+        {modeToggle}
+        <div className="space-y-3">
+          {benchColumn}
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
+            {teamCards}
+          </div>
         </div>
       </div>
     )
   }
 
-  // Bench open: left column = teams stacked, right column = bench
   return (
-    <div className="grid gap-3 md:grid-cols-2">
-      <div className="space-y-3">
-        {teamCards}
+    <div>
+      {modeToggle}
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-3">
+          {teamCards}
+        </div>
+        {benchColumn}
       </div>
-      {benchColumn}
     </div>
   )
 }

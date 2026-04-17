@@ -9,7 +9,7 @@ import NotificationsPanel from './components/NotificationsPanel'
 import { getLeagueTypeLabel, LEAGUE_TYPES } from './utils/leagueUtils'
 import { generateTeamShareMessage } from './utils/shareUtils'
 
-const ADMIN_PASSWORD = 'SoccerZone26'
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD ?? ''
 const ADMIN_SESSION_KEY = 'soccer-zone-admin-auth'
 const adminStorage = localStorage
 

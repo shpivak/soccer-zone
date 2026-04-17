@@ -40,6 +40,7 @@ jobs:
       - name: Build site
         env:
           VITE_DEFAULT_DATASET: prod
+          VITE_ADMIN_PASSWORD: ${{ secrets.VITE_ADMIN_PASSWORD }}
           VITE_ENABLE_PROD_DATASET: true
           VITE_ALLOW_PROD_WRITES: ${{ secrets.VITE_ALLOW_PROD_WRITES }}
           VITE_STORAGE_PROVIDER: supabase

@@ -32,5 +32,6 @@ jobs:
       - name: Run end-to-end tests
         env:
           VITE_DEFAULT_DATASET: test
+          VITE_ADMIN_PASSWORD: ${{ secrets.VITE_ADMIN_PASSWORD }}
         run: npm run test:e2e
 
