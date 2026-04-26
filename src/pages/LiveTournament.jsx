@@ -32,6 +32,81 @@ import {
   generateTeamShareMessage,
 } from '../utils/shareUtils'
 
+const teamSwatchClass = {
+  black: 'bg-gray-800',
+  yellow: 'bg-yellow-300',
+  pink: 'bg-pink-300',
+  orange: 'bg-orange-400',
+  blue: 'bg-blue-500',
+  red: 'bg-red-500',
+  gray: 'bg-gray-400',
+  white: 'bg-gray-50 border border-gray-300',
+}
+
+const teamColorLabel = {
+  black: 'שחור',
+  yellow: 'צהוב',
+  pink: 'ורוד',
+  orange: 'כתום',
+  blue: 'כחול',
+  red: 'אדום',
+  gray: 'אפור',
+  white: 'לבן',
+}
+
+const AddTeamForm = ({ showName, onAdd, onCancel }) => {
+  const [selectedColor, setSelectedColor] = useState(APP_CONFIG.allowedTeamColors[0])
+  const [name, setName] = useState('')
+  const canSubmit = !showName || name.trim().length > 0
+  const handleSubmit = () => { if (canSubmit) onAdd(selectedColor, name.trim()) }
+  return (
+    <div className="mb-3 rounded-xl border border-blue-200 bg-blue-50 p-3" data-testid="add-team-form">
+      {showName ? (
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); if (e.key === 'Escape') onCancel() }}
+          placeholder="שם קבוצה"
+          className="mb-2 w-full rounded-lg border bg-white px-3 py-2 text-sm"
+          data-testid="add-team-name-input"
+        />
+      ) : null}
+      <div className="mb-2 flex flex-wrap gap-2">
+        {APP_CONFIG.allowedTeamColors.map((color) => (
+          <button
+            key={color}
+            type="button"
+            onClick={() => setSelectedColor(color)}
+            title={teamColorLabel[color] ?? color}
+            data-testid={`add-team-color-swatch-${color}`}
+            className={`h-7 w-7 rounded-full transition-all hover:scale-110 ${teamSwatchClass[color] ?? 'bg-gray-200'} ${selectedColor === color ? 'scale-110 ring-2 ring-blue-500 ring-offset-1' : ''}`}
+          />
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={!canSubmit}
+          data-testid="add-team-confirm"
+          className="min-h-[36px] flex-1 rounded-xl bg-green-600 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+        >
+          הוסף
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          data-testid="add-team-cancel"
+          className="min-h-[36px] rounded-xl border bg-white px-3 py-1.5 text-sm text-gray-600"
+        >
+          ביטול
+        </button>
+      </div>
+    </div>
+  )
+}
+
 const getTournamentTopStats = (games, players) => {
   const goalCount = {}
   const assistCount = {}
@@ -73,10 +148,12 @@ const LiveTournament = ({ adminMode }) => {
   const [editingTournamentName, setEditingTournamentName] = useState(false)
   const [nameEditValue, setNameEditValue] = useState('')
   const [editingForTournamentId, setEditingForTournamentId] = useState(selectedTournamentId)
+  const [addTeamFormOpen, setAddTeamFormOpen] = useState(false)
 
   if (editingForTournamentId !== selectedTournamentId) {
     setEditingForTournamentId(selectedTournamentId)
     setEditingTournamentName(false)
+    setAddTeamFormOpen(false)
   }
   const labels = getLeagueModeLabels(league?.type)
   const maxPlayersPerTeam = league ? getMaxPlayersPerTeam(league) : undefined
@@ -406,22 +483,50 @@ const LiveTournament = ({ adminMode }) => {
     }
   }
 
-  const handleAddRegularTeam = () => {
+  const handleChangeRegularTeamColor = (teamId, color) => {
     if (!adminMode || !league || league.type !== LEAGUE_TYPES.regular) return
-    if ((league.teams?.length ?? 0) >= APP_CONFIG.regular.maxTeams) {
-      setTeamBuilderMessage(`אפשר להגדיר עד ${APP_CONFIG.regular.maxTeams} קבוצות בליגה סדירה.`)
-      return
+    syncRegularLeagueTeams((teams) => teams.map((team) => (team.id === teamId ? { ...team, color } : team)))
+  }
+
+  const openAddTeamForm = () => {
+    if (!adminMode || addTeamFormOpen) return
+    if (league.type === LEAGUE_TYPES.regular) {
+      if (!isRegularSetupEditable) return
+      if ((league.teams?.length ?? 0) >= APP_CONFIG.regular.maxTeams) {
+        setTeamBuilderMessage(`אפשר להגדיר עד ${APP_CONFIG.regular.maxTeams} קבוצות.`)
+        return
+      }
+    } else if (league.type === LEAGUE_TYPES.friendly) {
+      if ((selectedTournament?.teams?.length ?? 0) >= APP_CONFIG.friendly.maxTeams) {
+        setTeamBuilderMessage(`אפשר להגדיר עד ${APP_CONFIG.friendly.maxTeams} קבוצות.`)
+        return
+      }
+    } else if (league.type === LEAGUE_TYPES.tournament) {
+      if ((selectedTournament?.teams?.length ?? 0) >= APP_CONFIG.tournament.maxTeams) {
+        setTeamBuilderMessage(`אפשר להגדיר עד ${APP_CONFIG.tournament.maxTeams} קבוצות.`)
+        return
+      }
     }
     setTeamBuilderMessage('')
-    syncRegularLeagueTeams((teams) => [
-      ...teams,
-      {
-        id: `regular-team-${Date.now()}`,
-        name: `קבוצה ${teams.length + 1}`,
-        color: APP_CONFIG.allowedTeamColors[teams.length % APP_CONFIG.allowedTeamColors.length] ?? 'gray',
-        players: [],
-      },
-    ])
+    setAddTeamFormOpen(true)
+  }
+
+  const handleConfirmAddTeam = (color, name) => {
+    setAddTeamFormOpen(false)
+    if (league.type === LEAGUE_TYPES.regular) {
+      syncRegularLeagueTeams((teams) => [
+        ...teams,
+        { id: `regular-team-${Date.now()}`, name: name || `קבוצה ${teams.length + 1}`, color, players: [] },
+      ])
+    } else if (league.type === LEAGUE_TYPES.friendly) {
+      updateSelectedTournament((tournament) => ({
+        teams: [...tournament.teams, { id: `friendly-team-${Date.now()}`, name, color, players: [] }],
+      }))
+    } else if (league.type === LEAGUE_TYPES.tournament) {
+      updateSelectedTournament((tournament) => ({
+        teams: [...tournament.teams, { id: `tournament-team-${Date.now()}`, name, color, players: [] }],
+      }))
+    }
   }
 
   const handleDeleteTournament = () => {
@@ -434,8 +539,8 @@ const LiveTournament = ({ adminMode }) => {
 
   const handleRemoveFriendlyTeam = (teamId) => {
     if (!adminMode || !league || league.type !== LEAGUE_TYPES.friendly || !selectedTournament) return
-    if ((selectedTournament.teams?.length ?? 0) <= 2) {
-      setTeamBuilderMessage('חייב להיות לפחות 2 קבוצות.')
+    if ((selectedTournament.teams?.length ?? 0) <= APP_CONFIG.minTeams) {
+      setTeamBuilderMessage(`חייב להיות לפחות ${APP_CONFIG.minTeams} קבוצות.`)
       return
     }
     setTeamBuilderMessage('')
@@ -444,25 +549,27 @@ const LiveTournament = ({ adminMode }) => {
     }))
   }
 
-  const handleAddFriendlyTeam = () => {
-    if (!adminMode || !league || league.type !== LEAGUE_TYPES.friendly || !selectedTournament) return
-    if ((selectedTournament.teams?.length ?? 0) >= APP_CONFIG.friendly.maxTeams) {
-      setTeamBuilderMessage(`אפשר להגדיר עד ${APP_CONFIG.friendly.maxTeams} קבוצות במשחקי ידידות.`)
+
+  const handleRemoveTournamentTeam = (teamId) => {
+    if (!adminMode || !league || league.type !== LEAGUE_TYPES.tournament || !selectedTournament) return
+    if ((selectedTournament.teams?.length ?? 0) <= APP_CONFIG.minTeams) {
+      setTeamBuilderMessage(`חייב להיות לפחות ${APP_CONFIG.minTeams} קבוצות.`)
       return
     }
     setTeamBuilderMessage('')
     updateSelectedTournament((tournament) => ({
-      teams: [
-        ...tournament.teams,
-        {
-          id: `friendly-team-${Date.now()}`,
-          name: '',
-          color:
-            APP_CONFIG.allowedTeamColors[tournament.teams.length % APP_CONFIG.allowedTeamColors.length] ?? 'gray',
-          players: [],
-        },
-      ],
+      teams: tournament.teams.filter((team) => team.id !== teamId),
     }))
+  }
+
+  const handleRemoveRegularTeam = (teamId) => {
+    if (!adminMode || !league || league.type !== LEAGUE_TYPES.regular || !isRegularSetupEditable) return
+    if ((league.teams?.length ?? 0) <= APP_CONFIG.minTeams) {
+      setTeamBuilderMessage(`חייב להיות לפחות ${APP_CONFIG.minTeams} קבוצות.`)
+      return
+    }
+    setTeamBuilderMessage('')
+    syncRegularLeagueTeams((teams) => teams.filter((team) => team.id !== teamId))
   }
 
   if (!league) return null
@@ -640,13 +747,23 @@ const LiveTournament = ({ adminMode }) => {
                 <span>עריכת סגל</span>
               </label>
               <button
-                onClick={handleAddRegularTeam}
-                disabled={!adminMode || !isRegularSetupEditable}
+                onClick={openAddTeamForm}
+                disabled={!adminMode || !isRegularSetupEditable || addTeamFormOpen}
                 data-testid="add-regular-team"
                 className="min-h-[36px] rounded-xl border px-3 py-1.5 text-sm disabled:opacity-40"
               >
                 + קבוצה
               </button>
+              {adminMode && !isRegularSetupEditable ? (
+                <button
+                  type="button"
+                  title="עריכת קבוצות אפשרית רק בסשן הראשון. להפעלה בסשנים נוספים, סמן 'עריכת סגל' משמאל."
+                  data-testid="teams-locked-info"
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ℹ
+                </button>
+              ) : null}
             </div>
           }
         >
@@ -655,15 +772,18 @@ const LiveTournament = ({ adminMode }) => {
               {teamBuilderMessage}
             </p>
           ) : null}
+          {addTeamFormOpen ? (
+            <AddTeamForm showName onAdd={handleConfirmAddTeam} onCancel={() => setAddTeamFormOpen(false)} />
+          ) : null}
           <TeamBuilder
             teams={selectedTournament?.teams ?? []}
             players={leaguePlayers}
             maxPlayersPerTeam={maxPlayersPerTeam}
-            disabled={!adminMode || !isRegularSetupEditable}
+            disabled={!adminMode}
             adminMode={adminMode}
             onMovePlayer={handleMovePlayer}
             onBulkMoveAll={handleBulkMoveAll}
-            onChangeTeamColor={() => {}}
+            onChangeTeamColor={handleChangeRegularTeamColor}
             onChangeTeamName={handleChangeTeamName}
             onChangePlayerRank={handleChangePlayerRank}
             onTogglePlayerRole={handleTogglePlayerRole}
@@ -672,8 +792,9 @@ const LiveTournament = ({ adminMode }) => {
             onAddPlayer={handleAddPlayer}
             onCleanTeams={handleCleanTeams}
             onAutoGenerate={handleAutoGenerate}
-            allowColorEdit={false}
-            allowNameEdit={isRegularSetupEditable}
+            onRemoveTeam={handleRemoveRegularTeam}
+            allowColorEdit
+            allowNameEdit
             allowPlayerNameEdit={adminMode}
           />
         </CollapsibleSection>
@@ -684,8 +805,8 @@ const LiveTournament = ({ adminMode }) => {
             <div className="flex items-center gap-2">
               <ShareButton message={teamsShareMsg} label="שתף סגלים" name="teams" />
               <button
-                onClick={handleAddFriendlyTeam}
-                disabled={!adminMode}
+                onClick={openAddTeamForm}
+                disabled={!adminMode || addTeamFormOpen}
                 data-testid="add-friendly-team"
                 className="min-h-[36px] rounded-xl border px-3 py-1.5 text-sm disabled:opacity-40"
               >
@@ -698,6 +819,9 @@ const LiveTournament = ({ adminMode }) => {
             <p data-testid="team-builder-message" className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">
               {teamBuilderMessage}
             </p>
+          ) : null}
+          {addTeamFormOpen ? (
+            <AddTeamForm showName={false} onAdd={handleConfirmAddTeam} onCancel={() => setAddTeamFormOpen(false)} />
           ) : null}
           <TeamBuilder
             teams={selectedTournament?.teams ?? []}
@@ -720,11 +844,29 @@ const LiveTournament = ({ adminMode }) => {
           />
         </CollapsibleSection>
       ) : (
-        <CollapsibleSection title="בניית קבוצות" headerExtra={<ShareButton message={teamsShareMsg} label="שתף סגלים" name="teams" />}>
+        <CollapsibleSection
+          title="בניית קבוצות"
+          headerExtra={
+            <div className="flex items-center gap-2">
+              <ShareButton message={teamsShareMsg} label="שתף סגלים" name="teams" />
+              <button
+                onClick={openAddTeamForm}
+                disabled={!adminMode || addTeamFormOpen}
+                data-testid="add-tournament-team"
+                className="min-h-[36px] rounded-xl border px-3 py-1.5 text-sm disabled:opacity-40"
+              >
+                + קבוצה
+              </button>
+            </div>
+          }
+        >
           {teamBuilderMessage ? (
             <p data-testid="team-builder-message" className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">
               {teamBuilderMessage}
             </p>
+          ) : null}
+          {addTeamFormOpen ? (
+            <AddTeamForm showName={false} onAdd={handleConfirmAddTeam} onCancel={() => setAddTeamFormOpen(false)} />
           ) : null}
           <TeamBuilder
             teams={selectedTournament?.teams ?? []}
@@ -742,6 +884,7 @@ const LiveTournament = ({ adminMode }) => {
             onAddPlayer={handleAddPlayer}
             onCleanTeams={handleCleanTeams}
             onAutoGenerate={handleAutoGenerate}
+            onRemoveTeam={handleRemoveTournamentTeam}
             allowPlayerNameEdit={adminMode}
           />
         </CollapsibleSection>

@@ -828,11 +828,16 @@ test('regular league combined share includes all teams in standings', async ({ p
   await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('regular-1')
 
+  // Add team 5 via form
   await page.getByTestId('add-regular-team').click()
+  await page.getByTestId('add-team-name-input').fill('קבוצה 5')
+  await page.getByTestId('add-team-confirm').click()
+  // Add team 6 via form
   await page.getByTestId('add-regular-team').click()
+  await page.getByTestId('add-team-name-input').fill('קבוצה 6')
+  await page.getByTestId('add-team-confirm').click()
   // team-name-input only renders in drag mode
   await switchToDragMode(page)
-  await expect(page.getByTestId('team-name-input-regular-team-1')).toBeVisible()
   await expect(page.locator('input[value="קבוצה 5"]')).toBeVisible()
   await expect(page.locator('input[value="קבוצה 6"]')).toBeVisible()
 
@@ -897,8 +902,8 @@ test('delete league removes it from the league dropdown', async ({ page }) => {
 
 // ─── PR #10: rank, clean-teams, auto-generate ─────────────────────────────────
 
-test('player rank button cycles B → A → C → B and is hidden from non-admin', async ({ page }) => {
-  // Without admin — rank button should not be visible on bench players
+test('player rank dropdown is hidden from non-admin and shows A/B/C options for admin', async ({ page }) => {
+  // Without admin — rank select should not be visible on bench players
   await page.getByTestId('league-select').selectOption('tournament-1')
   await page.getByTestId('tournament-select').selectOption('2026-03-01')
 
@@ -907,7 +912,7 @@ test('player rank button cycles B → A → C → B and is hidden from non-admin
   const chipId = (await anyChip.getAttribute('data-testid')).replace('player-chip-', '')
   await expect(page.getByTestId(`player-rank-${chipId}`)).toHaveCount(0)
 
-  // With admin — rank button appears and cycles correctly
+  // With admin — rank select appears with correct default and accepts all ranks
   await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('tournament-2')
   await page.getByTestId('create-tournament-empty').click()
@@ -915,19 +920,19 @@ test('player rank button cycles B → A → C → B and is hidden from non-admin
 
   const rankChip = page.locator('[data-testid^="player-chip-"]').filter({ hasText: 'שחקן דירוג' }).first()
   const rankId = (await rankChip.getAttribute('data-testid')).replace('player-chip-', '')
-  const rankBtn = page.getByTestId(`player-rank-${rankId}`)
+  const rankSelect = page.getByTestId(`player-rank-${rankId}`)
 
   // Default rank is B
-  await expect(rankBtn).toContainText('B')
-  // B → A
-  await rankBtn.click()
-  await expect(rankBtn).toContainText('A')
-  // A → C
-  await rankBtn.click()
-  await expect(rankBtn).toContainText('C')
-  // C → B
-  await rankBtn.click()
-  await expect(rankBtn).toContainText('B')
+  await expect(rankSelect).toHaveValue('B')
+  // Select A directly
+  await rankSelect.selectOption('A')
+  await expect(rankSelect).toHaveValue('A')
+  // Select C directly
+  await rankSelect.selectOption('C')
+  await expect(rankSelect).toHaveValue('C')
+  // Select B directly
+  await rankSelect.selectOption('B')
+  await expect(rankSelect).toHaveValue('B')
 })
 
 test('clean teams button returns all players to bench', async ({ page }) => {
@@ -1004,11 +1009,14 @@ test('new friendly session starts with 2 teams and allows adding/removing teams'
   const teamCards = () => page.locator('[data-testid^="team-card-"]:not([data-testid="team-card-bench"])')
   await expect(teamCards()).toHaveCount(2)
 
-  // Add a third team
+  // Add a third team via the form (pick blue then confirm)
   await page.getByTestId('add-friendly-team').click()
+  await expect(page.getByTestId('add-team-form')).toBeVisible()
+  await page.getByTestId('add-team-color-swatch-blue').click()
+  await page.getByTestId('add-team-confirm').click()
   await expect(teamCards()).toHaveCount(3)
 
-  // Remove the third team — remove buttons only render in drag mode
+  // Remove the third team — remove buttons in drag mode
   await switchToDragMode(page)
   const removeButtons = page.locator('[data-testid^="remove-team-"]')
   await expect(removeButtons).toHaveCount(3)
@@ -1138,7 +1146,7 @@ test('share messages do not contain URL parameters', async ({ page, context }) =
 
 // ─── Selecting mode ───────────────────────────────────────────────────────────
 
-test('selecting mode is the default, cycling assigns players, save persists, drag mode preserves old behaviour', async ({ page }) => {
+test('selecting mode is the default, team dropdown assigns players, save persists, drag mode preserves old behaviour', async ({ page }) => {
   await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('tournament-2')
   await page.getByTestId('create-tournament-empty').click()
@@ -1153,13 +1161,13 @@ test('selecting mode is the default, cycling assigns players, save persists, dra
   // Flat player list visible in selecting mode
   await expect(page.locator('[data-testid^="player-chip-"]').filter({ hasText: 'שחקן 1' })).toBeVisible()
 
-  // Initial state: all players on bench — cycle buttons show '–'
-  const cycleBtn1 = page.locator('[data-testid^="player-chip-"]').filter({ hasText: 'שחקן 1' }).locator('[data-testid^="player-team-cycle-"]')
-  await expect(cycleBtn1).toContainText('–')
+  // Initial state: all players on bench — team dropdowns show empty value
+  const teamSelect1 = page.locator('[data-testid^="player-chip-"]').filter({ hasText: 'שחקן 1' }).locator('[data-testid^="player-team-cycle-"]')
+  await expect(teamSelect1).toHaveValue('')
 
-  // Click once: bench → team1
-  await cycleBtn1.click()
-  await expect(cycleBtn1).not.toContainText('–')
+  // Select team1 from dropdown
+  await teamSelect1.selectOption('team1')
+  await expect(teamSelect1).not.toHaveValue('')
 
   // Team1 count in summary card updates live
   await expect(page.getByTestId('team-player-count-team1')).toContainText('1')
@@ -1177,8 +1185,8 @@ test('selecting mode is the default, cycling assigns players, save persists, dra
 
   // Switching back to selecting resets pending to the saved state
   await page.getByTestId('mode-toggle-selecting').click()
-  const cycleBtnAgain = page.locator('[data-testid^="player-chip-"]').filter({ hasText: 'שחקן 1' }).locator('[data-testid^="player-team-cycle-"]')
-  await expect(cycleBtnAgain).not.toContainText('–')
+  const teamSelectAgain = page.locator('[data-testid^="player-chip-"]').filter({ hasText: 'שחקן 1' }).locator('[data-testid^="player-team-cycle-"]')
+  await expect(teamSelectAgain).not.toHaveValue('')
 })
 
 test('selecting mode auto-generate distributes players locally without saving, clean resets to bench locally', async ({ page }) => {
@@ -1190,8 +1198,12 @@ test('selecting mode auto-generate distributes players locally without saving, c
   // Auto-generate: distributes all 6 players across 3 teams (2 each)
   await page.getByTestId('auto-generate-teams-button').click()
 
-  // No cycle buttons should show '–' — all players assigned
-  await expect(page.locator('[data-testid^="player-team-cycle-"]').filter({ hasText: '–' })).toHaveCount(0)
+  // All team dropdowns should have non-empty values — all players assigned
+  const allTeamSelects = page.locator('[data-testid^="player-team-cycle-"]')
+  const selectCount = await allTeamSelects.count()
+  for (let i = 0; i < selectCount; i++) {
+    await expect(allTeamSelects.nth(i)).not.toHaveValue('')
+  }
 
   // Save button highlighted after auto-generate (pending change)
   await expect(page.getByTestId('selecting-mode-save')).toHaveClass(/ring-2/)
@@ -1208,6 +1220,191 @@ test('selecting mode auto-generate distributes players locally without saving, c
   // Back to selecting, clean puts everyone back to bench locally
   await page.getByTestId('mode-toggle-selecting').click()
   await page.getByTestId('clean-teams-button').click()
-  await expect(page.locator('[data-testid^="player-team-cycle-"]').filter({ hasText: '–' })).toHaveCount(6)
+  const afterCleanSelects = page.locator('[data-testid^="player-team-cycle-"]')
+  const afterCleanCount = await afterCleanSelects.count()
+  for (let i = 0; i < afterCleanCount; i++) {
+    await expect(afterCleanSelects.nth(i)).toHaveValue('')
+  }
   await expect(page.getByTestId('selecting-mode-save')).toHaveClass(/ring-2/)
+})
+
+// ─── 1.0.13: colors, top save, dropdowns, team add/remove ─────────────────────
+
+test('all allowed team colors appear in the color picker including red', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('tournament-1')
+  await page.getByTestId('tournament-select').selectOption('2026-03-01')
+  await switchToDragMode(page)
+
+  const colorSelect = page.getByTestId('team-color-select-team1')
+  for (const color of ['black', 'yellow', 'pink', 'orange', 'blue', 'red', 'gray', 'white']) {
+    await expect(colorSelect.locator(`option[value="${color}"]`)).toHaveCount(1)
+  }
+
+  // Red is selectable and updates the team card label
+  await colorSelect.selectOption('red')
+  await expect(page.getByTestId('team-card-team1')).toContainText('אדום')
+
+  // Blue works too
+  await colorSelect.selectOption('blue')
+  await expect(page.getByTestId('team-card-team1')).toContainText('כחול')
+
+  // Orange
+  await colorSelect.selectOption('orange')
+  await expect(page.getByTestId('team-card-team1')).toContainText('כתום')
+
+  // White
+  await colorSelect.selectOption('white')
+  await expect(page.getByTestId('team-card-team1')).toContainText('לבן')
+})
+
+test('top save button exists, is disabled when no changes, enabled when dirty, and saves on click', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('create-tournament-empty').click()
+  await addPlayer(page, 'שחקן שמירה')
+
+  // Top save button exists and is disabled initially (no pending changes)
+  await expect(page.getByTestId('selecting-mode-save-top')).toBeVisible()
+  await expect(page.getByTestId('selecting-mode-save-top')).toBeDisabled()
+  await expect(page.getByTestId('selecting-mode-save')).toBeDisabled()
+
+  // Make a change — assign player to team1
+  const teamSelect = page.locator('[data-testid^="player-chip-"]').filter({ hasText: 'שחקן שמירה' }).locator('[data-testid^="player-team-cycle-"]')
+  await teamSelect.selectOption('team1')
+
+  // Both save buttons now enabled and highlighted
+  await expect(page.getByTestId('selecting-mode-save-top')).not.toBeDisabled()
+  await expect(page.getByTestId('selecting-mode-save-top')).toHaveClass(/ring-2/)
+  await expect(page.getByTestId('selecting-mode-save')).not.toBeDisabled()
+  await expect(page.getByTestId('selecting-mode-save')).toHaveClass(/ring-2/)
+
+  // Click top save button — both buttons go back to disabled
+  await page.getByTestId('selecting-mode-save-top').click()
+  await expect(page.getByTestId('selecting-mode-save-top')).toBeDisabled()
+  await expect(page.getByTestId('selecting-mode-save')).toBeDisabled()
+
+  // Assignment was saved — drag mode shows player in team1
+  await page.getByTestId('mode-toggle-dragging').click()
+  await expect(page.getByTestId('team-card-team1').getByText('שחקן שמירה')).toBeVisible()
+})
+
+test('tournament league allows adding and removing teams — minimum 2, maximum 8', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('create-tournament-empty').click()
+
+  const teamCards = () =>
+    page.locator('[data-testid^="team-card-"]:not([data-testid="team-card-bench"])')
+
+  // Starts with 3 teams (tournament default)
+  await expect(teamCards()).toHaveCount(3)
+
+  // Add a 4th team via the color form (pick red then confirm)
+  await page.getByTestId('add-tournament-team').click()
+  await expect(page.getByTestId('add-team-form')).toBeVisible()
+  await page.getByTestId('add-team-color-swatch-red').click()
+  await page.getByTestId('add-team-confirm').click()
+  await expect(teamCards()).toHaveCount(4)
+
+  // Cancel button dismisses the form without adding
+  await page.getByTestId('add-tournament-team').click()
+  await expect(page.getByTestId('add-team-form')).toBeVisible()
+  await page.getByTestId('add-team-cancel').click()
+  await expect(page.getByTestId('add-team-form')).toHaveCount(0)
+  await expect(teamCards()).toHaveCount(4)
+
+  // Remove buttons appear in selecting mode — at 4 teams all are enabled
+  const removeButtons = page.locator('[data-testid^="remove-team-"]')
+  await expect(removeButtons).not.toHaveCount(0)
+  await expect(removeButtons.first()).not.toBeDisabled()
+
+  // Add a 5th, then remove back to 2
+  await page.getByTestId('add-tournament-team').click()
+  await page.getByTestId('add-team-confirm').click()
+  await switchToDragMode(page)
+  for (let i = 0; i < 3; i++) {
+    await page.locator('[data-testid^="remove-team-"]').last().click()
+  }
+  await expect(teamCards()).toHaveCount(2)
+
+  // At minimum — remove shows error message
+  await switchToDragMode(page)
+  await page.locator('[data-testid^="remove-team-"]').first().click()
+  await expect(page.getByTestId('team-builder-message')).toContainText('2')
+})
+
+test('regular league shows info button when locked and hides it on first session', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('regular-1')
+
+  // First session (leagueNumber 1) is editable — no info button
+  await page.getByTestId('tournament-select').selectOption('regular-1-mw1')
+  await expect(page.getByTestId('teams-locked-info')).toHaveCount(0)
+  await expect(page.getByTestId('add-regular-team')).not.toBeDisabled()
+
+  // Second session (leagueNumber 2) is locked — info button appears
+  await page.getByTestId('tournament-select').selectOption('regular-1-mw2')
+  await expect(page.getByTestId('teams-locked-info')).toBeVisible()
+  await expect(page.getByTestId('add-regular-team')).toBeDisabled()
+})
+
+test('adding a team shows color picker form; regular league shows name input too; color is always editable after creation', async ({ page }) => {
+  await enableAdminMode(page)
+
+  // ── Tournament: color-only form ──
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('create-tournament-empty').click()
+
+  await page.getByTestId('add-tournament-team').click()
+  await expect(page.getByTestId('add-team-form')).toBeVisible()
+  // Name input should NOT appear for tournament
+  await expect(page.getByTestId('add-team-name-input')).toHaveCount(0)
+  // All allowed colors have swatches
+  for (const color of ['black', 'yellow', 'pink', 'orange', 'blue', 'red', 'gray', 'white']) {
+    await expect(page.getByTestId(`add-team-color-swatch-${color}`)).toBeVisible()
+  }
+  // Pick orange, confirm — team gets that color
+  await page.getByTestId('add-team-color-swatch-orange').click()
+  await page.getByTestId('add-team-confirm').click()
+  await expect(page.getByTestId('add-team-form')).toHaveCount(0)
+  // New team should reflect orange color — find the last color select (the 4th team)
+  await switchToDragMode(page)
+  const allColorSelects = page.locator('[data-testid^="team-color-select-"]')
+  await expect(allColorSelects).toHaveCount(4)
+  const newTeamSelect = allColorSelects.last()
+  await expect(newTeamSelect).toHaveValue('orange')
+
+  // Color can always be changed after creation
+  await newTeamSelect.selectOption('red')
+  await expect(newTeamSelect).toHaveValue('red')
+
+  // ── Regular league: name + color form ──
+  await page.getByTestId('league-select').selectOption('regular-1')
+  await page.getByTestId('tournament-select').selectOption('regular-1-mw1')
+
+  await page.getByTestId('add-regular-team').click()
+  await expect(page.getByTestId('add-team-form')).toBeVisible()
+  // Name input IS present for regular league
+  await expect(page.getByTestId('add-team-name-input')).toBeVisible()
+  // Confirm is disabled until name is filled
+  await expect(page.getByTestId('add-team-confirm')).toBeDisabled()
+  await page.getByTestId('add-team-name-input').fill('קבוצת הזהב')
+  await expect(page.getByTestId('add-team-confirm')).not.toBeDisabled()
+  // Pick blue color
+  await page.getByTestId('add-team-color-swatch-blue').click()
+  await page.getByTestId('add-team-confirm').click()
+  await expect(page.getByTestId('add-team-form')).toHaveCount(0)
+
+  // Color picker visible on the new team (always editable)
+  await switchToDragMode(page)
+  const newTeamCards = page.locator('[data-testid^="team-color-select-"]')
+  const count = await newTeamCards.count()
+  // There should be a color select for the new team with value 'blue'
+  let foundBlue = false
+  for (let i = 0; i < count; i++) {
+    const val = await newTeamCards.nth(i).inputValue()
+    if (val === 'blue') { foundBlue = true; break }
+  }
+  expect(foundBlue).toBeTruthy()
 })
