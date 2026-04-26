@@ -9,6 +9,7 @@ const colorLabel = {
   pink: 'ורוד',
   orange: 'כתום',
   blue: 'כחול',
+  red: 'אדום',
   gray: 'אפור',
   white: 'לבן',
 }
@@ -19,12 +20,24 @@ const colorClass = {
   pink: 'bg-pink-50 border-pink-300',
   orange: 'bg-orange-50 border-orange-300',
   blue: 'bg-blue-50 border-blue-300',
+  red: 'bg-red-50 border-red-300',
   gray: 'bg-gray-50 border-gray-300',
   white: 'bg-white border-gray-300',
 }
 
 // Cycle order: B (default) → A → C → B
 const RANKS = ['B', 'A', 'C']
+
+const SORT_MODES = ['none', 'rank', 'role']
+const sortModeLabel = { none: 'מיין שחקנים ↕', rank: 'A→C', role: '⚔→🛡' }
+
+const rankSortOrder = { A: 0, B: 1, C: 2 }
+const roleSortOrder = (p) => {
+  if (p.isOffense && !p.isDefense) return 0
+  if (p.isOffense && p.isDefense) return 1
+  if (!p.isOffense && p.isDefense) return 2
+  return 3
+}
 
 const rankClass = {
   A: 'bg-amber-100 text-amber-800',
@@ -39,6 +52,7 @@ const teamBtnColorClass = {
   pink: 'bg-pink-50 border-pink-300 text-pink-900',
   orange: 'bg-orange-50 border-orange-300 text-orange-900',
   blue: 'bg-blue-50 border-blue-300 text-blue-900',
+  red: 'bg-red-50 border-red-300 text-red-900',
   gray: 'bg-gray-50 border-gray-300 text-gray-700',
   white: 'bg-white border-gray-300 text-gray-700',
 }
@@ -422,20 +436,31 @@ const SelectingView = ({
   onDeletePlayer,
   onChangePlayerRank,
   onTogglePlayerRole,
+  onRemoveTeam,
 }) => {
   const [pendingAssignments, setPendingAssignments] = useState(() => computeAssignments(teams, players))
   const [hasChanges, setHasChanges] = useState(false)
-
-  // Options for cycling: null (bench) then each team id
-  const teamOptions = [null, ...teams.map((t) => t.id)]
+  const [sortMode, setSortMode] = useState('none')
 
   const getEffectiveTeamId = (playerId) => pendingAssignments.get(playerId) ?? null
 
-  const cycleTeam = (playerId) => {
-    const current = getEffectiveTeamId(playerId)
-    const idx = teamOptions.indexOf(current)
-    const next = teamOptions[(idx + 1) % teamOptions.length]
-    setPendingAssignments((prev) => new Map(prev).set(playerId, next))
+  const cycleSortMode = () => {
+    const idx = SORT_MODES.indexOf(sortMode)
+    setSortMode(SORT_MODES[(idx + 1) % SORT_MODES.length])
+  }
+
+  const sortedPlayers = useMemo(() => {
+    if (sortMode === 'rank') {
+      return [...players].sort((a, b) => (rankSortOrder[a.rank ?? 'B'] ?? 1) - (rankSortOrder[b.rank ?? 'B'] ?? 1))
+    }
+    if (sortMode === 'role') {
+      return [...players].sort((a, b) => roleSortOrder(a) - roleSortOrder(b))
+    }
+    return players
+  }, [players, sortMode])
+
+  const setTeamForPlayer = (playerId, teamId) => {
+    setPendingAssignments((prev) => new Map(prev).set(playerId, teamId || null))
     setHasChanges(true)
   }
 
@@ -473,14 +498,60 @@ const SelectingView = ({
 
   const currentRankOf = (player) => player.rank ?? 'B'
 
-  const cycleRank = (player) => {
-    const idx = RANKS.indexOf(currentRankOf(player))
-    const next = RANKS[(idx + 1) % RANKS.length]
-    onChangePlayerRank?.(player.id, next)
-  }
-
   return (
     <div className="space-y-3">
+      {/* Top action row: utility buttons + save */}
+      {adminMode ? (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleAutoGenerate}
+            disabled={disabled}
+            data-testid="auto-generate-teams-button-top"
+            className="min-h-[36px] rounded-lg border border-violet-300 bg-violet-50 px-3 py-1 text-xs text-violet-700 hover:bg-violet-100 disabled:opacity-40"
+            title="חלק שחקנים אוטומטית לקבוצות מאוזנות"
+          >
+            ✨ אוטו
+          </button>
+          <button
+            type="button"
+            onClick={handleClean}
+            disabled={disabled}
+            data-testid="clean-teams-button-top"
+            className="min-h-[36px] rounded-lg border border-orange-300 bg-orange-50 px-3 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-40"
+            title="החזר את כל השחקנים לספסל"
+          >
+            נקה
+          </button>
+          <button
+            type="button"
+            onClick={cycleSortMode}
+            className={`min-h-[36px] rounded-lg border px-3 py-1 text-xs transition-colors ${
+              sortMode !== 'none'
+                ? 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
+            }`}
+            title="מיין שחקנים"
+          >
+            {sortModeLabel[sortMode]}
+          </button>
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={disabled || !hasChanges}
+            data-testid="selecting-mode-save-top"
+            className={`min-h-[36px] rounded-xl px-4 py-1.5 text-sm font-semibold text-white transition-all disabled:opacity-40 ${
+              hasChanges
+                ? 'bg-green-500 shadow-md ring-2 ring-green-400 ring-offset-1 hover:bg-green-600'
+                : 'bg-green-600 hover:bg-green-700'
+            }`}
+          >
+            שמור
+          </button>
+        </div>
+      ) : null}
+
       {/* Team summary cards — collapsed view */}
       <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
         {teams.map((team) => {
@@ -500,6 +571,18 @@ const SelectingView = ({
                 >
                   {count}{maxPlayersPerTeam ? `/${maxPlayersPerTeam}` : ''}
                 </span>
+                {adminMode && onRemoveTeam ? (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveTeam(team.id)}
+                    disabled={disabled || teams.length <= APP_CONFIG.minTeams}
+                    title={teams.length <= APP_CONFIG.minTeams ? `מינימום ${APP_CONFIG.minTeams} קבוצות` : 'הסר קבוצה'}
+                    data-testid={`remove-team-${team.id}`}
+                    className="min-h-[22px] min-w-[22px] shrink-0 rounded-md bg-red-50 px-1 py-0.5 text-xs text-red-600 hover:bg-red-100 disabled:opacity-40"
+                  >
+                    ✕
+                  </button>
+                ) : null}
               </div>
             </div>
           )
@@ -517,10 +600,9 @@ const SelectingView = ({
 
       {/* Flat player list */}
       <div className="space-y-2">
-        {players.map((player) => {
+        {sortedPlayers.map((player) => {
           const currentTeamId = getEffectiveTeamId(player.id)
           const currentTeam = teams.find((t) => t.id === currentTeamId) ?? null
-          const teamLabel = currentTeam ? getTeamDisplayName(currentTeam).slice(0, 4) : '–'
           const teamBtnClass = currentTeam
             ? (teamBtnColorClass[currentTeam.color] ?? 'bg-gray-100 border-gray-300 text-gray-600')
             : 'bg-gray-100 border-gray-200 text-gray-500'
@@ -546,19 +628,19 @@ const SelectingView = ({
 
               <span className="min-w-0 flex-1 truncate leading-tight">{player.name}</span>
 
-              {/* Admin: rank + roles */}
+              {/* Admin: rank dropdown + roles */}
               {adminMode ? (
                 <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    type="button"
+                  <select
+                    value={currentRankOf(player)}
+                    onChange={(e) => onChangePlayerRank?.(player.id, e.target.value)}
                     disabled={disabled}
-                    onClick={() => cycleRank(player)}
-                    className={`min-h-[32px] min-w-[28px] rounded-md px-1.5 py-1 text-xs font-bold ${rankClass[currentRankOf(player)] ?? 'bg-gray-100 text-gray-600'}`}
+                    className={`min-h-[32px] rounded-md border px-1 py-0.5 text-xs font-bold ${rankClass[currentRankOf(player)] ?? 'bg-gray-100 text-gray-600'}`}
                     data-testid={`player-rank-${player.id}`}
-                    title="דירוג שחקן (A/B/C)"
+                    title="דירוג שחקן"
                   >
-                    {currentRankOf(player)}
-                  </button>
+                    {RANKS.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
                   <button
                     type="button"
                     disabled={disabled}
@@ -580,17 +662,19 @@ const SelectingView = ({
                 </div>
               ) : null}
 
-              {/* Team cycling button */}
-              <button
-                type="button"
-                onClick={() => cycleTeam(player.id)}
+              {/* Team dropdown */}
+              <select
+                value={getEffectiveTeamId(player.id) ?? ''}
+                onChange={(e) => setTeamForPlayer(player.id, e.target.value)}
                 disabled={disabled}
-                className={`min-h-[32px] min-w-[44px] shrink-0 rounded-md border px-1.5 py-1 text-xs font-bold transition-colors ${teamBtnClass}`}
-                title={currentTeam ? getTeamDisplayName(currentTeam) : 'ספסל'}
+                className={`min-h-[32px] shrink-0 rounded-md border px-1 py-0.5 text-xs font-bold transition-colors ${teamBtnClass}`}
                 data-testid={`player-team-cycle-${player.id}`}
               >
-                {teamLabel}
-              </button>
+                <option value="">–</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>{getTeamDisplayName(t).slice(0, 6)}</option>
+                ))}
+              </select>
             </div>
           )
         })}
@@ -619,6 +703,18 @@ const SelectingView = ({
           >
             נקה
           </button>
+          <button
+            type="button"
+            onClick={cycleSortMode}
+            className={`min-h-[36px] rounded-lg border px-3 py-1 text-xs transition-colors ${
+              sortMode !== 'none'
+                ? 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
+            }`}
+            title="מיין שחקנים"
+          >
+            {sortModeLabel[sortMode]}
+          </button>
         </div>
       ) : null}
 
@@ -635,7 +731,7 @@ const SelectingView = ({
           <button
             type="button"
             onClick={handleSave}
-            disabled={disabled}
+            disabled={disabled || !hasChanges}
             data-testid="selecting-mode-save"
             className={`min-h-[44px] w-full rounded-xl px-4 py-2 text-sm font-semibold text-white transition-all disabled:opacity-40 ${
               hasChanges
@@ -745,6 +841,7 @@ const TeamBuilder = ({
           onDeletePlayer={onDeletePlayer}
           onChangePlayerRank={onChangePlayerRank}
           onTogglePlayerRole={onTogglePlayerRole}
+          onRemoveTeam={onRemoveTeam}
         />
       </div>
     )
