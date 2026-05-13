@@ -1615,26 +1615,30 @@ test.skip('generate image modal — squads button available in friendly and regu
 
 // ─── Coach selection ───────────────────────────────────────────────────────────
 
-test('coach select screen appears on fresh load, selecting a coach hides it and shows badge', async ({ page }) => {
-  // Navigate fresh with no coach in storage
+test('fresh load defaults to all-leagues view; coach badge opens login screen, login sets filtered view', async ({ page }) => {
+  // Fresh load (no coach in storage) defaults to all-leagues — no login screen
   await page.addInitScript(() => {
     localStorage.removeItem('soccer-zone-coach-id')
   })
   await page.goto('/')
   await page.getByRole('button', { name: /יאללה נשחק/ }).click({ timeout: 2000 }).catch(() => {})
 
-  // Coach login screen is shown with dropdown + password
+  // App loads directly — no login screen, badge shows "כולם"
+  await expect(page.getByTestId('coach-select-screen')).toHaveCount(0)
+  await expect(page.getByTestId('coach-badge')).toBeVisible()
+  await expect(page.getByTestId('coach-badge')).toContainText('מאמן אחר')
+
+  // Click badge to switch to a named coach
+  await page.getByTestId('coach-badge').click()
   await expect(page.getByTestId('coach-select-screen')).toBeVisible()
   await expect(page.getByTestId('coach-login-select')).toBeVisible()
   await expect(page.getByTestId('coach-login-password')).toBeVisible()
-  await expect(page.getByTestId('coach-login-submit')).toBeVisible()
 
   // Log in as zach
   await loginAsCoach(page, 'zach')
 
-  // Screen is gone, main app is shown with coach badge
+  // Login screen gone, badge now shows coach name
   await expect(page.getByTestId('coach-select-screen')).toHaveCount(0)
-  await expect(page.getByTestId('coach-badge')).toBeVisible()
   await expect(page.getByTestId('coach-badge')).toContainText('צח')
 })
 

@@ -251,7 +251,7 @@ function App() {
   const urlLeagueIdRef = useRef(getLeagueIdFromUrl())
 
   // ── Coach selection ──────────────────────────────────────────────────────────
-  const [activeCoachId, setActiveCoachId] = useState(() => getCoachIdFromUrl() ?? localStorage.getItem(COACH_SESSION_KEY) ?? null)
+  const [activeCoachId, setActiveCoachId] = useState(() => getCoachIdFromUrl() ?? localStorage.getItem(COACH_SESSION_KEY) ?? COACH_ALL)
 
   const handleSelectCoach = (coachId) => {
     localStorage.setItem(COACH_SESSION_KEY, coachId)
@@ -488,7 +488,7 @@ function App() {
               title="בחר מאמן"
               className="shrink-0 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs text-gray-500 hover:bg-gray-100"
             >
-              כולם ↩
+              מאמן אחר ↩
             </button>
           )}
         </div>
