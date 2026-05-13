@@ -87,6 +87,8 @@ test.beforeEach(async ({ page }) => {
     }
     // Dismiss the "What's New" popup so it doesn't block test interactions
     localStorage.setItem('soccer-zone-whats-new-seen', appVersion)
+    // Bypass coach selection screen — tests run as "all leagues" identity
+    localStorage.setItem('soccer-zone-coach-id', '__admin__')
   }, packageJson.version)
   await page.goto('/')
   // Dismiss What's New modal if it shows (guards against dev-server version cache mismatch)
@@ -1591,4 +1593,131 @@ test.skip('generate image modal — squads button available in friendly and regu
   // Regular league
   await page.getByTestId('league-select').selectOption('regular-1')
   await expect(page.getByTestId('generate-image-btn-squads')).toBeVisible()
+})
+
+// ─── Coach selection ───────────────────────────────────────────────────────────
+
+test('coach select screen appears on fresh load, selecting a coach hides it and shows badge', async ({ page }) => {
+  // Navigate fresh with no coach in storage
+  await page.addInitScript(() => {
+    localStorage.removeItem('soccer-zone-coach-id')
+  })
+  await page.goto('/')
+  await page.getByRole('button', { name: /יאללה נשחק/ }).click({ timeout: 2000 }).catch(() => {})
+
+  // Coach selection screen is shown
+  await expect(page.getByTestId('coach-select-screen')).toBeVisible()
+  await expect(page.getByTestId('coach-select-zach')).toBeVisible()
+  await expect(page.getByTestId('coach-select-rotem')).toBeVisible()
+  await expect(page.getByTestId('coach-select-moti')).toBeVisible()
+  await expect(page.getByTestId('coach-select-haggai')).toBeVisible()
+  await expect(page.getByTestId('coach-select-all')).toBeVisible()
+
+  // Select a coach
+  await page.getByTestId('coach-select-zach').click()
+
+  // Screen is gone, main app is shown with coach badge
+  await expect(page.getByTestId('coach-select-screen')).toHaveCount(0)
+  await expect(page.getByTestId('coach-badge')).toBeVisible()
+  await expect(page.getByTestId('coach-badge')).toContainText('צח')
+})
+
+test('coach badge switch button returns to selection screen', async ({ page }) => {
+  await expect(page.getByTestId('coach-badge')).toBeVisible()
+  await page.getByTestId('coach-badge').click()
+  await expect(page.getByTestId('coach-select-screen')).toBeVisible()
+})
+
+test('coach filter: leagues without coachId are visible to all; leagues with coachId only to that coach', async ({ page }) => {
+  await enableAdminMode(page)
+
+  // Assign regular-1 league to zach; capture its display name first
+  await page.getByTestId('league-select').selectOption('regular-1')
+  const leagueName = await page.getByTestId('league-name-input').inputValue()
+  await page.getByTestId('nav-admin').click()
+  await page.getByTestId('league-coach-select').selectOption('zach')
+  await page.getByTestId('nav-live').click()
+
+  // Switch to rotem — the zach-assigned league should NOT appear in dropdown
+  await page.getByTestId('coach-badge').click()
+  await page.getByTestId('coach-select-rotem').click()
+  const optionsRotem = await page.getByTestId('league-select').locator('option').allTextContents()
+  expect(optionsRotem.some((o) => o.includes(leagueName))).toBeFalsy()
+
+  // Switch to zach — the assigned league SHOULD appear
+  await page.getByTestId('coach-badge').click()
+  await page.getByTestId('coach-select-zach').click()
+  const optionsZach = await page.getByTestId('league-select').locator('option').allTextContents()
+  expect(optionsZach.some((o) => o.includes(leagueName))).toBeTruthy()
+})
+
+// ─── Auto-schedule ─────────────────────────────────────────────────────────────
+
+test('creating a regular league shows the schedule drawer, confirm creates tournament stubs', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('nav-admin').click()
+
+  // Create a regular league
+  await page.getByTestId('add-league-name').fill('ליגת בדיקה')
+  await page.getByTestId('add-league-type').selectOption('regular')
+  await page.getByTestId('add-league-save').click()
+
+  // Schedule drawer should appear
+  await expect(page.getByTestId('schedule-drawer')).toBeVisible()
+
+  // Default values: rounds input visible, cadence buttons, start date
+  await expect(page.getByTestId('schedule-rounds')).toBeVisible()
+  await expect(page.getByTestId('schedule-cadence-7')).toBeVisible()
+  await expect(page.getByTestId('schedule-cadence-14')).toBeVisible()
+  await expect(page.getByTestId('schedule-start-date')).toBeVisible()
+  await expect(page.getByTestId('schedule-final')).toBeVisible()
+
+  // Set 3 rounds, include final, bi-weekly
+  await page.getByTestId('schedule-rounds').fill('3')
+  await page.getByTestId('schedule-final').check()
+  await page.getByTestId('schedule-cadence-14').click()
+
+  // Confirm button shows correct count
+  await expect(page.getByTestId('schedule-confirm')).toContainText('4') // 3 rounds + 1 final
+
+  await page.getByTestId('schedule-confirm').click()
+
+  // Drawer is gone
+  await expect(page.getByTestId('schedule-drawer')).toHaveCount(0)
+
+  // Navigate to live view — 4 tournament stubs should be selectable
+  await page.getByTestId('nav-live').click()
+  const tournamentOptions = await page.getByTestId('tournament-select').locator('option').allTextContents()
+  expect(tournamentOptions.length).toBeGreaterThanOrEqual(4)
+  // Last one should be named "גמר"
+  expect(tournamentOptions[tournamentOptions.length - 1]).toContain('גמר')
+})
+
+test('creating a non-regular league skips the schedule drawer', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('nav-admin').click()
+
+  await page.getByTestId('add-league-name').fill('טורניר בדיקה')
+  await page.getByTestId('add-league-type').selectOption('tournament')
+  await page.getByTestId('add-league-save').click()
+
+  // No drawer for tournament/friendly leagues
+  await expect(page.getByTestId('schedule-drawer')).toHaveCount(0)
+})
+
+test('schedule drawer skip button dismisses drawer without creating stubs', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('nav-admin').click()
+
+  await page.getByTestId('add-league-name').fill('ליגת דלג')
+  await page.getByTestId('add-league-type').selectOption('regular')
+  await page.getByTestId('add-league-save').click()
+
+  await expect(page.getByTestId('schedule-drawer')).toBeVisible()
+  await page.getByTestId('schedule-skip').click()
+
+  await expect(page.getByTestId('schedule-drawer')).toHaveCount(0)
+  // Navigate to live — no tournament stubs created
+  await page.getByTestId('nav-live').click()
+  await expect(page.getByTestId('create-tournament-empty')).toBeVisible()
 })

@@ -188,10 +188,10 @@ export const AppProvider = ({ children }) => {
       setPlayers: updatePlayers,
       setTournaments: updateTournaments,
       setActiveLeagueId: changeLeague,
-      createLeague: ({ name, type }) => {
+      createLeague: ({ name, type, id: providedId }) => {
         const trimmed = name?.trim() ?? ''
         const safeType = Object.values(LEAGUE_TYPES).includes(type) ? type : LEAGUE_TYPES.tournament
-        const id = `league-${Date.now()}`
+        const id = providedId ?? `league-${Date.now()}`
         const newLeague = {
           id,
           name: trimmed || APP_CONFIG.defaultLeagueName,
