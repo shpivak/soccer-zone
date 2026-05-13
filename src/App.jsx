@@ -14,13 +14,16 @@ const ADMIN_SESSION_KEY = 'soccer-zone-admin-auth'
 const COACH_SESSION_KEY = 'soccer-zone-coach-id'
 const adminStorage = localStorage
 
-// ─── Coach definitions ────────────────────────────────────────────────────────
-export const COACHES = [
-  { id: 'zach',   name: 'צח' },
-  { id: 'rotem',  name: 'רותם' },
-  { id: 'moti',   name: 'מוטי' },
-  { id: 'haggai', name: 'חגי' },
-]
+// ─── Coach definitions (parsed from VITE_COACHES env var) ────────────────────
+// Format: "EnglishId:שםבעברית:password;..." — stored as a GH secret
+const parseCoachesFromEnv = () => {
+  const raw = import.meta.env.VITE_COACHES ?? ''
+  return raw.split(';').filter(Boolean).map((part) => {
+    const [id, name, password] = part.trim().split(':')
+    return { id: id.toLowerCase().trim(), name: name.trim(), password: password.trim() }
+  })
+}
+export const COACHES = parseCoachesFromEnv()
 const COACH_ALL = '__admin__'
 
 const getCoachIdFromUrl = () => {
@@ -28,40 +31,81 @@ const getCoachIdFromUrl = () => {
   return new URLSearchParams(window.location.search).get('coach') ?? null
 }
 
-// ─── Coach selection screen ───────────────────────────────────────────────────
-const CoachSelectScreen = ({ onSelect }) => (
-  <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-green-50 px-6" data-testid="coach-select-screen">
-    <img src={soccerZoneLogo} alt="Soccer Zone" className="h-20 w-20 rounded-full object-cover shadow-md" />
-    <h1 className="text-2xl font-bold text-gray-800">Soccer Zone</h1>
-    <p className="text-sm text-gray-500">בחר מאמן להמשיך</p>
-    <div className="grid w-full max-w-xs grid-cols-2 gap-3">
-      {COACHES.map((coach) => (
-        <button
-          key={coach.id}
-          type="button"
-          onClick={() => onSelect(coach.id)}
-          data-testid={`coach-select-${coach.id}`}
-          className="rounded-2xl border-2 border-green-200 bg-white py-5 text-lg font-bold text-gray-800 shadow-sm hover:border-green-500 hover:bg-green-50"
-        >
-          {coach.name}
-        </button>
-      ))}
-    </div>
-    <button
-      type="button"
-      onClick={() => onSelect(COACH_ALL)}
-      data-testid="coach-select-all"
-      className="mt-2 rounded-xl border border-gray-300 bg-white px-6 py-3 text-sm text-gray-500 hover:bg-gray-50"
+// ─── Coach login screen ───────────────────────────────────────────────────────
+const CoachLoginScreen = ({ onSelect }) => {
+  const [selectedId, setSelectedId] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState(false)
+
+  const handleLogin = () => {
+    if (!selectedId) { setError(true); return }
+    if (selectedId === COACH_ALL) {
+      if (password === ADMIN_PASSWORD) { onSelect(COACH_ALL) }
+      else { setError(true); setPassword('') }
+      return
+    }
+    const coach = COACHES.find((c) => c.id === selectedId)
+    if (!coach) { setError(true); return }
+    if (password === coach.password) { onSelect(selectedId) }
+    else { setError(true); setPassword('') }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-green-50 px-6"
+      data-testid="coach-select-screen"
     >
-      כל הליגות / מנהל
-    </button>
-  </div>
-)
+      <img src={soccerZoneLogo} alt="Soccer Zone" className="h-20 w-20 rounded-full object-cover shadow-md" />
+      <h1 className="text-2xl font-bold text-gray-800">Soccer Zone</h1>
+
+      <div className="w-full max-w-xs space-y-3">
+        <select
+          value={selectedId}
+          onChange={(e) => { setSelectedId(e.target.value); setError(false) }}
+          data-testid="coach-login-select"
+          className="w-full rounded-2xl border-2 border-gray-200 bg-white px-4 py-3 text-base text-gray-800 focus:border-green-500 focus:outline-none"
+        >
+          <option value="">בחר משתמש...</option>
+          {COACHES.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+          <option value={COACH_ALL}>Admin / כל הליגות</option>
+        </select>
+
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => { setPassword(e.target.value); setError(false) }}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleLogin() }}
+          placeholder="סיסמה"
+          data-testid="coach-login-password"
+          className="w-full rounded-2xl border-2 border-gray-200 bg-white px-4 py-3 text-base focus:border-green-500 focus:outline-none"
+          dir="ltr"
+        />
+
+        {error && (
+          <p className="text-center text-sm text-red-500" data-testid="coach-login-error">
+            סיסמה שגויה — נסה שוב
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={handleLogin}
+          data-testid="coach-login-submit"
+          className="w-full rounded-2xl bg-green-600 py-3 text-base font-bold text-white hover:bg-green-700"
+        >
+          כניסה
+        </button>
+      </div>
+    </div>
+  )
+}
 
 // ─── Auto-schedule drawer ─────────────────────────────────────────────────────
 const ScheduleDrawer = ({ leagueName, onConfirm, onSkip }) => {
   const today = new Date().toISOString().slice(0, 10)
-  const [rounds, setRounds] = useState(4)
+  const [rounds, setRounds] = useState(1)
   const [includeFinal, setIncludeFinal] = useState(false)
   const [cadence, setCadence] = useState(7)
   const [startDate, setStartDate] = useState(today)
@@ -203,6 +247,8 @@ function App() {
   const [pendingLeagueId, setPendingLeagueId] = useState(null)
   const [pendingLeagueName, setPendingLeagueName] = useState('')
   const didHydrateLeagueFromUrlRef = useRef(false)
+  // Capture the ?league= URL param once at mount so URL-shared leagues stay visible
+  const urlLeagueIdRef = useRef(getLeagueIdFromUrl())
 
   // ── Coach selection ──────────────────────────────────────────────────────────
   const [activeCoachId, setActiveCoachId] = useState(() => getCoachIdFromUrl() ?? localStorage.getItem(COACH_SESSION_KEY) ?? null)
@@ -219,10 +265,17 @@ function App() {
 
   // Leagues visible to the current coach.
   // __admin__ sees everything. A named coach sees ONLY leagues explicitly assigned to them.
-  // Leagues with no coachId are admin-only (not shown to individual coaches).
+  // Leagues with no coachId are admin-only, EXCEPT a league opened via direct ?league= URL
+  // (so sharing a link always works regardless of coachId assignment).
   const visibleLeagues = useMemo(() => {
     if (!activeCoachId || activeCoachId === COACH_ALL) return leagues
-    return leagues.filter((l) => l.coachId === activeCoachId)
+    const coachLeagues = leagues.filter((l) => l.coachId === activeCoachId)
+    const urlId = urlLeagueIdRef.current
+    if (urlId && !coachLeagues.some((l) => l.id === urlId)) {
+      const linked = leagues.find((l) => l.id === urlId)
+      if (linked) return [...coachLeagues, linked]
+    }
+    return coachLeagues
   }, [leagues, activeCoachId])
 
   const activeCoachName = COACHES.find((c) => c.id === activeCoachId)?.name ?? null
@@ -385,9 +438,9 @@ function App() {
     )
   }
 
-  // ── Show coach selection screen if no coach selected ─────────────────────────
+  // ── Show coach login screen if no coach selected ─────────────────────────────
   if (!activeCoachId) {
-    return <CoachSelectScreen onSelect={handleSelectCoach} />
+    return <CoachLoginScreen onSelect={handleSelectCoach} />
   }
 
   return (

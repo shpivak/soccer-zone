@@ -60,6 +60,24 @@ const enableAdminMode = async (page) => {
   await page.getByTestId('nav-live').click()
 }
 
+// Parse coach credentials from VITE_COACHES env var (same format as the app)
+const getCoachPassword = (coachId) => {
+  const raw = process.env.VITE_COACHES ?? ''
+  const entries = raw.split(';').filter(Boolean).map((p) => {
+    const [id, , password] = p.trim().split(':')
+    return { id: id.toLowerCase().trim(), password: password.trim() }
+  })
+  if (coachId === '__admin__') return process.env.VITE_ADMIN_PASSWORD ?? ''
+  return entries.find((e) => e.id === coachId)?.password ?? ''
+}
+
+// Fill the coach login screen (dropdown + password) and submit
+const loginAsCoach = async (page, coachId) => {
+  await page.getByTestId('coach-login-select').selectOption(coachId)
+  await page.getByTestId('coach-login-password').fill(getCoachPassword(coachId))
+  await page.getByTestId('coach-login-submit').click()
+}
+
 const setScore = async (page, side, score) => {
   const display = page.getByTestId(`score-${side}-input`)
   const plus = page.getByTestId(`score-${side}-plus`)
@@ -1605,16 +1623,14 @@ test('coach select screen appears on fresh load, selecting a coach hides it and 
   await page.goto('/')
   await page.getByRole('button', { name: /יאללה נשחק/ }).click({ timeout: 2000 }).catch(() => {})
 
-  // Coach selection screen is shown
+  // Coach login screen is shown with dropdown + password
   await expect(page.getByTestId('coach-select-screen')).toBeVisible()
-  await expect(page.getByTestId('coach-select-zach')).toBeVisible()
-  await expect(page.getByTestId('coach-select-rotem')).toBeVisible()
-  await expect(page.getByTestId('coach-select-moti')).toBeVisible()
-  await expect(page.getByTestId('coach-select-haggai')).toBeVisible()
-  await expect(page.getByTestId('coach-select-all')).toBeVisible()
+  await expect(page.getByTestId('coach-login-select')).toBeVisible()
+  await expect(page.getByTestId('coach-login-password')).toBeVisible()
+  await expect(page.getByTestId('coach-login-submit')).toBeVisible()
 
-  // Select a coach
-  await page.getByTestId('coach-select-zach').click()
+  // Log in as zach
+  await loginAsCoach(page, 'zach')
 
   // Screen is gone, main app is shown with coach badge
   await expect(page.getByTestId('coach-select-screen')).toHaveCount(0)
@@ -1640,13 +1656,13 @@ test('coach filter: leagues without coachId are visible to all; leagues with coa
 
   // Switch to rotem — the zach-assigned league should NOT appear in dropdown
   await page.getByTestId('coach-badge').click()
-  await page.getByTestId('coach-select-rotem').click()
+  await loginAsCoach(page, 'rotem')
   const optionsRotem = await page.getByTestId('league-select').locator('option').allTextContents()
   expect(optionsRotem.some((o) => o.includes(leagueName))).toBeFalsy()
 
   // Switch to zach — the assigned league SHOULD appear
   await page.getByTestId('coach-badge').click()
-  await page.getByTestId('coach-select-zach').click()
+  await loginAsCoach(page, 'zach')
   const optionsZach = await page.getByTestId('league-select').locator('option').allTextContents()
   expect(optionsZach.some((o) => o.includes(leagueName))).toBeTruthy()
 })
