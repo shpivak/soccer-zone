@@ -85,7 +85,14 @@ export const applySessionCustomNameToTeams = (teams = [], name) =>
 
 export const getTeamColorLabel = (color) => colorLabel[color] ?? color ?? ''
 
-export const getTeamDisplayName = (team) => team?.name?.trim() || colorLabel[team?.color] || team?.id || '-'
+// Strip leading emoji characters (and trailing space) from a display string
+export const stripLeadingEmoji = (str) =>
+  str.replace(/^[\p{Emoji_Presentation}\uFE0F\u20E3\u200D]+[\s\uFE0F]*/gu, '').trim()
+
+export const getTeamDisplayName = (team) => {
+  const raw = team?.name?.trim() || colorLabel[team?.color] || team?.id || '-'
+  return stripLeadingEmoji(raw)
+}
 
 export const getSessionGamesLimit = (league) => {
   if (league?.type === LEAGUE_TYPES.regular) {

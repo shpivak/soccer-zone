@@ -101,7 +101,7 @@ export const generateDayShareMessage = (
   players,
   leagueName,
   standings = [],
-  { includeResults = true, shareUrl = '' } = {},
+  { includeResults = true, shareUrl = '', mvp = null } = {},
 ) => {
   const date = tournament.date ?? ''
   const games = tournament.games ?? []
@@ -135,6 +135,7 @@ export const generateDayShareMessage = (
 
   if (scorerLines) msg += `\n\n🥅 כובשים:\n${scorerLines}`
   if (assisterLines) msg += `\n\n🎯 מבשלים:\n${assisterLines}`
+  if (mvp) msg += `\n\n🏆 MVP: *${mvp.name}*`
 
   return appendShareLink(msg, shareUrl)
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import CollapsibleSection from '../components/CollapsibleSection'
 import GameInput from '../components/GameInput'
+import GenerateImageModal from '../components/GenerateImageModal'
 import ScoreBoard from '../components/ScoreBoard'
 import ShareButton from '../components/ShareButton'
 import TeamBuilder from '../components/TeamBuilder'
@@ -32,17 +33,6 @@ import {
   generateTeamShareMessage,
 } from '../utils/shareUtils'
 
-const teamSwatchClass = {
-  black: 'bg-gray-800',
-  yellow: 'bg-yellow-300',
-  pink: 'bg-pink-300',
-  orange: 'bg-orange-400',
-  blue: 'bg-blue-500',
-  red: 'bg-red-500',
-  gray: 'bg-gray-400',
-  white: 'bg-gray-50 border border-gray-300',
-}
-
 const teamColorLabel = {
   black: 'שחור',
   yellow: 'צהוב',
@@ -52,6 +42,17 @@ const teamColorLabel = {
   red: 'אדום',
   gray: 'אפור',
   white: 'לבן',
+}
+
+const colorPillClass = {
+  black: 'bg-gray-200 border-gray-500 text-gray-900',
+  yellow: 'bg-yellow-50 border-yellow-300 text-yellow-900',
+  pink: 'bg-pink-50 border-pink-300 text-pink-900',
+  orange: 'bg-orange-50 border-orange-300 text-orange-900',
+  blue: 'bg-blue-50 border-blue-300 text-blue-900',
+  red: 'bg-red-50 border-red-300 text-red-900',
+  gray: 'bg-gray-50 border-gray-300 text-gray-700',
+  white: 'bg-white border-gray-300 text-gray-700',
 }
 
 const AddTeamForm = ({ showName, onAdd, onCancel }) => {
@@ -78,19 +79,20 @@ const AddTeamForm = ({ showName, onAdd, onCancel }) => {
             key={color}
             type="button"
             onClick={() => setSelectedColor(color)}
-            title={teamColorLabel[color] ?? color}
             data-testid={`add-team-color-swatch-${color}`}
-            className={`h-7 w-7 rounded-full transition-all hover:scale-110 ${teamSwatchClass[color] ?? 'bg-gray-200'} ${selectedColor === color ? 'scale-110 ring-2 ring-blue-500 ring-offset-1' : ''}`}
-          />
+            className={`rounded-lg border px-2 py-1 text-xs font-medium transition-all ${colorPillClass[color] ?? 'bg-gray-100 border-gray-300 text-gray-700'} ${selectedColor === color ? 'ring-2 ring-blue-500 ring-offset-1 font-bold' : 'opacity-70 hover:opacity-100'}`}
+          >
+            {teamColorLabel[color] ?? color}
+          </button>
         ))}
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={handleSubmit}
           disabled={!canSubmit}
           data-testid="add-team-confirm"
-          className="min-h-[36px] flex-1 rounded-xl bg-green-600 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+          className="rounded-lg bg-green-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-40"
         >
           הוסף
         </button>
@@ -98,7 +100,7 @@ const AddTeamForm = ({ showName, onAdd, onCancel }) => {
           type="button"
           onClick={onCancel}
           data-testid="add-team-cancel"
-          className="min-h-[36px] rounded-xl border bg-white px-3 py-1.5 text-sm text-gray-600"
+          className="rounded-lg border bg-white px-3 py-1 text-xs text-gray-600"
         >
           ביטול
         </button>
@@ -149,6 +151,13 @@ const LiveTournament = ({ adminMode }) => {
   const [nameEditValue, setNameEditValue] = useState('')
   const [editingForTournamentId, setEditingForTournamentId] = useState(selectedTournamentId)
   const [addTeamFormOpen, setAddTeamFormOpen] = useState(false)
+  const [showGenerateModal, setShowGenerateModal] = useState(false)
+  const [generateModalMode, setGenerateModalMode] = useState('live')
+
+  const openGenerateModal = (modalMode) => {
+    setGenerateModalMode(modalMode)
+    setShowGenerateModal(true)
+  }
 
   if (editingForTournamentId !== selectedTournamentId) {
     setEditingForTournamentId(selectedTournamentId)
@@ -198,8 +207,9 @@ const LiveTournament = ({ adminMode }) => {
     return generateDayShareMessage(selectedTournament, selectedTournament.teams, leaguePlayers, league.name, dayStandings, {
       includeResults,
       shareUrl: sessionShareUrl,
+      mvp: overallLeaders?.mvp ?? null,
     })
-  }, [selectedTournament, leaguePlayers, league, standings, sessionShareUrl])
+  }, [selectedTournament, leaguePlayers, league, standings, sessionShareUrl, overallLeaders])
 
   const teamsShareMsg = useMemo(() => {
     if (!selectedTournament || !league) return ''
@@ -529,6 +539,11 @@ const LiveTournament = ({ adminMode }) => {
     }
   }
 
+  const handleToggleLock = () => {
+    if (!adminMode || !selectedTournament) return
+    updateSelectedTournament((tournament) => ({ locked: !tournament.locked }))
+  }
+
   const handleDeleteTournament = () => {
     if (!adminMode || !selectedTournament) return
     if (!window.confirm(`למחוק את ${labels.selectLabel} ${selectedTournament.leagueNumber ?? ''}? פעולה זו אינה הפיכה.`)) return
@@ -589,10 +604,12 @@ const LiveTournament = ({ adminMode }) => {
     )
   }
 
+  const isGameEditingAllowed = adminMode && !selectedTournament.locked
+
   const undoButton = (
     <button
       onClick={handleUndoLastGame}
-      disabled={!adminMode || selectedTournament.games.length === 0}
+      disabled={!isGameEditingAllowed || selectedTournament.games.length === 0}
       data-testid="undo-last-game"
       className="min-h-[40px] rounded-xl border px-3 py-1.5 text-sm disabled:opacity-30"
     >
@@ -602,6 +619,18 @@ const LiveTournament = ({ adminMode }) => {
 
   return (
     <div className="space-y-3">
+      {showGenerateModal && (
+        <GenerateImageModal
+          mode={generateModalMode}
+          onClose={() => setShowGenerateModal(false)}
+          stats={overallStats}
+          leaders={overallLeaders}
+          standings={standings}
+          league={league}
+          session={selectedTournament}
+          players={leaguePlayers}
+        />
+      )}
       {/* Round / game-day row */}
       <div className="rounded-2xl bg-white p-3 shadow-sm">
         <h2 className="mb-2 text-sm font-bold text-gray-700">{labels.liveTitle}</h2>
@@ -633,6 +662,15 @@ const LiveTournament = ({ adminMode }) => {
             className="shrink-0 min-h-[44px] rounded-xl bg-red-600 px-4 py-2.5 text-sm text-white disabled:opacity-40"
           >
             מחק יום
+          </button>
+          <button
+            onClick={handleToggleLock}
+            disabled={!adminMode}
+            data-testid="lock-tournament"
+            title={selectedTournament.locked ? 'בטל נעילת יום' : 'נעל יום (מנע עריכה)'}
+            className={`shrink-0 min-h-[44px] rounded-xl px-3 py-2.5 text-lg disabled:opacity-40 ${selectedTournament.locked ? 'bg-amber-500 text-white' : 'border border-gray-300 bg-white text-gray-500 hover:bg-gray-50'}`}
+          >
+            {selectedTournament.locked ? '🔒' : '🔓'}
           </button>
         </div>
 
@@ -691,11 +729,23 @@ const LiveTournament = ({ adminMode }) => {
           </div>
         ) : null}
 
-        {/* Share buttons for this day */}
+        {/* Share + generate buttons for this day */}
         {selectedTournament.games.length > 0 ? (
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <ShareButton message={dayShareMsg} label="שתף תוצאות היום" name="day" />
             <ShareButton message={combinedShareMsg} label="שתף יום + סטט׳ ליגה" name="combined" />
+            {/* TODO: re-enable once image generation is fixed
+            <button
+              type="button"
+              onClick={() => openGenerateModal('live')}
+              data-testid="generate-image-btn-live"
+              className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700"
+              title="ייצר תמונה AI"
+            >
+              <span>✨</span>
+              <span className="hidden sm:inline">ייצר תמונה</span>
+            </button>
+            */}
           </div>
         ) : null}
       </div>
@@ -705,11 +755,11 @@ const LiveTournament = ({ adminMode }) => {
         key={editingGame?.id ?? `${selectedTournament.id}-new-game`}
         teams={selectedTournament.teams}
         players={leaguePlayers}
-        disabled={!adminMode}
+        disabled={!isGameEditingAllowed}
         onSave={handleSaveGame}
         editingGame={editingGame}
         onCancelEdit={() => setEditingGame(null)}
-        message={gameInputMessage}
+        message={selectedTournament.locked ? 'יום המשחקים נעול. בטל נעילה לעריכה.' : gameInputMessage}
         persistKey={selectedTournament.id}
       />
 
@@ -804,6 +854,9 @@ const LiveTournament = ({ adminMode }) => {
           headerExtra={
             <div className="flex items-center gap-2">
               <ShareButton message={teamsShareMsg} label="שתף סגלים" name="teams" />
+              {/* TODO: re-enable once image generation is fixed
+              <button type="button" onClick={() => openGenerateModal('squads')} data-testid="generate-image-btn-squads" className="rounded-lg bg-purple-600 p-2 text-white hover:bg-purple-700" title="ייצר תמונת סגלים">✨</button>
+              */}
               <button
                 onClick={openAddTeamForm}
                 disabled={!adminMode || addTeamFormOpen}
@@ -849,6 +902,9 @@ const LiveTournament = ({ adminMode }) => {
           headerExtra={
             <div className="flex items-center gap-2">
               <ShareButton message={teamsShareMsg} label="שתף סגלים" name="teams" />
+              {/* TODO: re-enable once image generation is fixed
+              <button type="button" onClick={() => openGenerateModal('squads')} data-testid="generate-image-btn-squads" className="rounded-lg bg-purple-600 p-2 text-white hover:bg-purple-700" title="ייצר תמונת סגלים">✨</button>
+              */}
               <button
                 onClick={openAddTeamForm}
                 disabled={!adminMode || addTeamFormOpen}
@@ -899,7 +955,7 @@ const LiveTournament = ({ adminMode }) => {
           league={league}
           games={selectedTournament.games}
           teams={selectedTournament.teams}
-          readOnly={!adminMode}
+          readOnly={!isGameEditingAllowed}
           onEdit={setEditingGame}
           onDelete={handleDeleteGame}
         />
