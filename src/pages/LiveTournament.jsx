@@ -131,7 +131,7 @@ const getTournamentTopStats = (games, players) => {
   return { topScorers: getTopEntries(goalCount), topAssisters: getTopEntries(assistCount) }
 }
 
-const LiveTournament = ({ adminMode }) => {
+const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
   const { activeLeagueId, leagues, players, tournaments, setLeagues, setPlayers, setTournaments } = useAppContext()
   const league = leagues.find((item) => item.id === activeLeagueId) ?? null
   const leaguePlayers = useMemo(
@@ -655,6 +655,16 @@ const LiveTournament = ({ adminMode }) => {
           >
             {labels.createAnother}
           </button>
+          {adminMode && league?.type === LEAGUE_TYPES.regular && (league.teams?.length ?? 0) >= 2 && (
+            <button
+              onClick={() => onOpenScheduleDrawer?.(league.teams.length)}
+              data-testid="open-schedule-drawer"
+              className="shrink-0 min-h-[44px] rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-700 hover:bg-blue-100"
+              title="תכנן מחזורים עתידיים"
+            >
+              📅
+            </button>
+          )}
           <button
             onClick={handleDeleteTournament}
             disabled={!adminMode}

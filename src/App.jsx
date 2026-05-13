@@ -103,14 +103,17 @@ const CoachLoginScreen = ({ onSelect }) => {
 }
 
 // ─── Auto-schedule drawer ─────────────────────────────────────────────────────
-const ScheduleDrawer = ({ leagueName, onConfirm, onSkip }) => {
+const ScheduleDrawer = ({ leagueName, numTeams, onConfirm, onSkip }) => {
   const today = new Date().toISOString().slice(0, 10)
   const [rounds, setRounds] = useState(1)
   const [includeFinal, setIncludeFinal] = useState(false)
   const [cadence, setCadence] = useState(7)
   const [startDate, setStartDate] = useState(today)
 
-  const handleConfirm = () => onConfirm({ rounds, includeFinal, cadence, startDate })
+  const roundsPerCycle = numTeams > 1 ? numTeams - 1 : 1
+  const totalStubs = rounds * roundsPerCycle + (includeFinal ? 1 : 0)
+
+  const handleConfirm = () => onConfirm({ rounds, includeFinal, cadence, startDate, numTeams })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" data-testid="schedule-drawer">
@@ -179,7 +182,7 @@ const ScheduleDrawer = ({ leagueName, onConfirm, onSkip }) => {
             data-testid="schedule-confirm"
             className="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700"
           >
-            צור {rounds + (includeFinal ? 1 : 0)} מחזורים
+            צור {totalStubs} מחזורים
           </button>
           <button
             type="button"
@@ -246,6 +249,7 @@ function App() {
   const [scheduleDrawerOpen, setScheduleDrawerOpen] = useState(false)
   const [pendingLeagueId, setPendingLeagueId] = useState(null)
   const [pendingLeagueName, setPendingLeagueName] = useState('')
+  const [pendingNumTeams, setPendingNumTeams] = useState(0)
   const didHydrateLeagueFromUrlRef = useRef(false)
   // Capture the ?league= URL param once at mount so URL-shared leagues stay visible
   const urlLeagueIdRef = useRef(getLeagueIdFromUrl())
@@ -385,19 +389,22 @@ function App() {
     const name = newLeagueName.trim()
     createLeague({ id: leagueId, name, type: newLeagueType })
     setNewLeagueName('')
-    if (newLeagueType === LEAGUE_TYPES.regular) {
-      // Show schedule drawer for regular leagues
-      setPendingLeagueId(leagueId)
-      setPendingLeagueName(name)
-      setScheduleDrawerOpen(true)
-    } else {
-      setNewLeagueType(LEAGUE_TYPES.tournament)
-    }
+    setNewLeagueType(LEAGUE_TYPES.tournament)
   }
 
-  const handleConfirmSchedule = ({ rounds, includeFinal, cadence, startDate }) => {
+  // Called from LiveTournament — opens the schedule drawer for the active regular league
+  const handleOpenScheduleDrawer = (numTeams) => {
+    if (!activeLeague) return
+    setPendingLeagueId(activeLeague.id)
+    setPendingLeagueName(activeLeague.name)
+    setPendingNumTeams(numTeams)
+    setScheduleDrawerOpen(true)
+  }
+
+  const handleConfirmSchedule = ({ rounds, includeFinal, cadence, startDate, numTeams }) => {
     if (!pendingLeagueId) return
-    const totalRounds = rounds + (includeFinal ? 1 : 0)
+    const roundsPerCycle = numTeams > 1 ? numTeams - 1 : 1
+    const totalRounds = rounds * roundsPerCycle + (includeFinal ? 1 : 0)
     const base = startDate || new Date().toISOString().slice(0, 10)
     const now = Date.now()
     const stubs = Array.from({ length: totalRounds }, (_, i) => {
@@ -419,14 +426,14 @@ function App() {
     setScheduleDrawerOpen(false)
     setPendingLeagueId(null)
     setPendingLeagueName('')
-    setNewLeagueType(LEAGUE_TYPES.tournament)
+    setPendingNumTeams(0)
   }
 
   const handleSkipSchedule = () => {
     setScheduleDrawerOpen(false)
     setPendingLeagueId(null)
     setPendingLeagueName('')
-    setNewLeagueType(LEAGUE_TYPES.tournament)
+    setPendingNumTeams(0)
   }
 
   const handleLeagueMetaChange = (field, value) => {
@@ -449,6 +456,7 @@ function App() {
       {scheduleDrawerOpen && (
         <ScheduleDrawer
           leagueName={pendingLeagueName}
+          numTeams={pendingNumTeams}
           onConfirm={handleConfirmSchedule}
           onSkip={handleSkipSchedule}
         />
@@ -510,7 +518,7 @@ function App() {
             טוען נתונים...
           </section>
         ) : page === 'live' ? (
-          <LiveTournament adminMode={adminMode} />
+          <LiveTournament adminMode={adminMode} onOpenScheduleDrawer={handleOpenScheduleDrawer} />
         ) : page === 'stats' ? (
           <Stats />
         ) : (
@@ -627,24 +635,6 @@ function App() {
                         ))}
                       </select>
                     </div>
-                    {/* Schedule planning — regular leagues only */}
-                    {activeLeague.type === LEAGUE_TYPES.regular && (
-                      <div className="mt-3 border-t pt-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPendingLeagueId(activeLeague.id)
-                            setPendingLeagueName(activeLeague.name)
-                            setScheduleDrawerOpen(true)
-                          }}
-                          data-testid="open-schedule-drawer"
-                          className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
-                        >
-                          📅 תכנון מחזורים
-                        </button>
-                        <p className="mt-1 text-xs text-gray-400">יוצר מחזורים ריקים עם תאריכים מתוכננים</p>
-                      </div>
-                    )}
                   </div>
                 ) : null}
 

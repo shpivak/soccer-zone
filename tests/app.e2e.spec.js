@@ -1672,72 +1672,96 @@ test('coach filter: leagues without coachId are visible to all; leagues with coa
 })
 
 // ─── Auto-schedule ─────────────────────────────────────────────────────────────
+// regular-1 has 4 teams → (4-1)=3 game days per round, so 1 round = 3 stubs
 
-test('creating a regular league shows the schedule drawer, confirm creates tournament stubs', async ({ page }) => {
+test('schedule button appears in live mode for regular league with teams; confirm creates (numTeams-1)*rounds stubs', async ({ page }) => {
   await enableAdminMode(page)
-  await page.getByTestId('nav-admin').click()
+  // Select the regular league that already has teams in test data
+  await page.getByTestId('league-select').selectOption('regular-1')
 
-  // Create a regular league
-  await page.getByTestId('add-league-name').fill('ליגת בדיקה')
-  await page.getByTestId('add-league-type').selectOption('regular')
-  await page.getByTestId('add-league-save').click()
+  // Schedule 📅 button is visible next to create-tournament
+  await expect(page.getByTestId('open-schedule-drawer')).toBeVisible()
+  const beforeOptions = await page.getByTestId('tournament-select').locator('option').allTextContents()
 
-  // Schedule drawer should appear
+  await page.getByTestId('open-schedule-drawer').click()
   await expect(page.getByTestId('schedule-drawer')).toBeVisible()
 
-  // Default values: rounds input visible, cadence buttons, start date
-  await expect(page.getByTestId('schedule-rounds')).toBeVisible()
-  await expect(page.getByTestId('schedule-cadence-7')).toBeVisible()
-  await expect(page.getByTestId('schedule-cadence-14')).toBeVisible()
-  await expect(page.getByTestId('schedule-start-date')).toBeVisible()
-  await expect(page.getByTestId('schedule-final')).toBeVisible()
+  // Default rounds=1, 4 teams → 3 stubs displayed
+  await expect(page.getByTestId('schedule-confirm')).toContainText('3')
 
-  // Set 3 rounds, include final, bi-weekly
-  await page.getByTestId('schedule-rounds').fill('3')
+  // Set 2 rounds + final → 3*2+1 = 7 stubs
+  await page.getByTestId('schedule-rounds').fill('2')
   await page.getByTestId('schedule-final').check()
-  await page.getByTestId('schedule-cadence-14').click()
-
-  // Confirm button shows correct count
-  await expect(page.getByTestId('schedule-confirm')).toContainText('4') // 3 rounds + 1 final
+  await expect(page.getByTestId('schedule-confirm')).toContainText('7')
 
   await page.getByTestId('schedule-confirm').click()
-
-  // Drawer is gone
   await expect(page.getByTestId('schedule-drawer')).toHaveCount(0)
 
-  // Navigate to live view — 4 tournament stubs should be selectable
-  await page.getByTestId('nav-live').click()
-  const tournamentOptions = await page.getByTestId('tournament-select').locator('option').allTextContents()
-  expect(tournamentOptions.length).toBeGreaterThanOrEqual(4)
-  // Last one should be named "גמר"
-  expect(tournamentOptions[tournamentOptions.length - 1]).toContain('גמר')
-})
-
-test('creating a non-regular league skips the schedule drawer', async ({ page }) => {
-  await enableAdminMode(page)
-  await page.getByTestId('nav-admin').click()
-
-  await page.getByTestId('add-league-name').fill('טורניר בדיקה')
-  await page.getByTestId('add-league-type').selectOption('tournament')
-  await page.getByTestId('add-league-save').click()
-
-  // No drawer for tournament/friendly leagues
-  await expect(page.getByTestId('schedule-drawer')).toHaveCount(0)
+  // 7 new stubs added on top of existing game days
+  const afterOptions = await page.getByTestId('tournament-select').locator('option').allTextContents()
+  expect(afterOptions.length).toBe(beforeOptions.length + 7)
+  expect(afterOptions[afterOptions.length - 1]).toContain('גמר')
 })
 
 test('schedule drawer skip button dismisses drawer without creating stubs', async ({ page }) => {
   await enableAdminMode(page)
-  await page.getByTestId('nav-admin').click()
-
-  await page.getByTestId('add-league-name').fill('ליגת דלג')
-  await page.getByTestId('add-league-type').selectOption('regular')
-  await page.getByTestId('add-league-save').click()
+  await page.getByTestId('league-select').selectOption('regular-1')
+  await page.getByTestId('open-schedule-drawer').click()
 
   await expect(page.getByTestId('schedule-drawer')).toBeVisible()
+  const beforeOptions = await page.getByTestId('tournament-select').locator('option').allTextContents()
   await page.getByTestId('schedule-skip').click()
 
   await expect(page.getByTestId('schedule-drawer')).toHaveCount(0)
-  // Navigate to live — no tournament stubs created
+  const afterOptions = await page.getByTestId('tournament-select').locator('option').allTextContents()
+  expect(afterOptions.length).toBe(beforeOptions.length)
+})
+
+// ─── Coach toggle ──────────────────────────────────────────────────────────────
+
+test('toggling between Zach and Admin: each sees only their expected leagues', async ({ page }) => {
+  await enableAdminMode(page)
+
+  // As Admin: assign regular-1 to Zach, assign another league to Rotem
+  await page.getByTestId('nav-admin').click()
+  await page.getByTestId('league-select').selectOption('regular-1')
+  const zachLeagueName = await page.getByTestId('league-name-input').inputValue()
+  await page.getByTestId('league-coach-select').selectOption('zach')
+
+  // Create a second league assigned to Rotem
+  await page.getByTestId('add-league-name').fill('ליגת רותם')
+  await page.getByTestId('add-league-type').selectOption('tournament')
+  await page.getByTestId('add-league-save').click()
+  await page.getByTestId('league-coach-select').selectOption('rotem')
+
+  // Switch to Zach
+  await page.getByTestId('coach-badge').click()
+  await loginAsCoach(page, 'zach')
+
+  // Zach sees only their assigned league
+  const zachOptions = await page.getByTestId('league-select').locator('option').allTextContents()
+  expect(zachOptions.some((o) => o.includes(zachLeagueName))).toBeTruthy()
+  expect(zachOptions.some((o) => o.includes('ליגת רותם'))).toBeFalsy()
+
+  // Switch back to Admin
+  await page.getByTestId('coach-badge').click()
+  await loginAsCoach(page, '__admin__')
+
+  // Admin sees all leagues (including both)
+  const adminOptions = await page.getByTestId('league-select').locator('option').allTextContents()
+  expect(adminOptions.some((o) => o.includes(zachLeagueName))).toBeTruthy()
+  expect(adminOptions.some((o) => o.includes('ליגת רותם'))).toBeTruthy()
+
+  // Admin renames Zach's league
+  await page.getByTestId('nav-admin').click()
+  await page.getByTestId('league-select').selectOption('regular-1')
+  const renamedName = zachLeagueName + ' (שונה)'
+  await page.getByTestId('league-name-input').fill(renamedName)
   await page.getByTestId('nav-live').click()
-  await expect(page.getByTestId('create-tournament-empty')).toBeVisible()
+
+  // Switch back to Zach — sees the renamed league
+  await page.getByTestId('coach-badge').click()
+  await loginAsCoach(page, 'zach')
+  const zachOptionsAfter = await page.getByTestId('league-select').locator('option').allTextContents()
+  expect(zachOptionsAfter.some((o) => o.includes(renamedName))).toBeTruthy()
 })
