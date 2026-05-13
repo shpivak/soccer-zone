@@ -50,13 +50,8 @@ const setTeamPlayer = async (page, teamId, playerName, assigned = true) => {
 }
 
 const enableAdminMode = async (page) => {
-  await page.getByTestId('nav-admin').click()
-  await page.getByTestId('admin-password-input').fill(process.env.VITE_ADMIN_PASSWORD)
-  await page.getByTestId('admin-unlock-button').click()
-  // Unlocking admin mode can surface the "What's New" modal (z-50 overlay) which blocks clicks.
-  // Dismiss it if present, so navigation is stable.
-  const whatsNewDismiss = page.getByRole('button', { name: /יאללה נשחק/i })
-  await whatsNewDismiss.click({ timeout: 2000 }).catch(() => {})
+  // Admin mode is now derived from coach login (beforeEach sets __admin__).
+  // Just make sure we're on the live tab so subsequent nav clicks are predictable.
   await page.getByTestId('nav-live').click()
 }
 
@@ -151,19 +146,9 @@ test('main navigation, dropdown labels, and tournament stats render for the sele
 })
 
 test('management controls are separated and empty tournament leagues can still start from scratch', async ({ page }) => {
-  // Admin panel is on the admin tab
+  // Admin panel is on the admin tab — always accessible when logged in
   await page.getByTestId('nav-admin').click()
   await expect(page.getByTestId('management-panel')).toBeVisible()
-  // Admin is off by default — only password prompt visible
-  await expect(page.getByTestId('admin-password-input')).toBeVisible()
-  await expect(page.getByTestId('add-league-name')).toHaveCount(0)
-  await expect(page.getByTestId('clear-league-data')).toHaveCount(0)
-
-  await enableAdminMode(page)  // navigates to admin, unlocks, returns to live
-
-  // Re-check admin panel controls on admin tab
-  await page.getByTestId('nav-admin').click()
-  await expect(page.getByTestId('admin-password-input')).toHaveCount(0)
   await expect(page.getByTestId('add-league-name')).toBeVisible()
   await expect(page.getByTestId('clear-league-data')).toBeEnabled()
   await expect(page.getByTestId('reset-league-to-mock')).toBeEnabled()
@@ -702,44 +687,16 @@ test('bug-4: צור מחזור creates a new round on first click for regular le
   await expect(page.locator('[data-testid="tournament-select"] option')).toHaveCount(countBefore + 1)
 })
 
-test('admin mode requires password, hides controls when locked, and persists in session storage', async ({ page }) => {
-  // Admin panel lives on the admin tab
+test('admin panel is accessible when logged in and controls are visible', async ({ page }) => {
   await page.getByTestId('nav-admin').click()
-
-  // Admin is off by default — only password prompt is visible
-  await expect(page.getByTestId('admin-password-input')).toBeVisible()
-  await expect(page.getByTestId('admin-unlock-button')).toBeVisible()
-  await expect(page.getByTestId('clear-league-data')).toHaveCount(0)
-  await expect(page.getByTestId('add-league-name')).toHaveCount(0)
-
-  // Wrong password shows error and stays locked
-  await page.getByTestId('admin-password-input').fill('wrongpassword')
-  await page.getByTestId('admin-unlock-button').click()
-  await expect(page.getByTestId('admin-password-error')).toBeVisible()
-  await expect(page.getByTestId('admin-password-input')).toBeVisible()
-  await expect(page.getByTestId('clear-league-data')).toHaveCount(0)
-
-  // Correct password unlocks (enableAdminMode navigates to admin, unlocks, returns to live)
-  await enableAdminMode(page)
-
-  // Check admin controls on admin tab
-  await page.getByTestId('nav-admin').click()
-  await expect(page.getByTestId('admin-password-input')).toHaveCount(0)
-  await expect(page.getByTestId('admin-lock-button')).toBeVisible()
+  await expect(page.getByTestId('management-panel')).toBeVisible()
   await expect(page.getByTestId('clear-league-data')).toBeVisible()
   await expect(page.getByTestId('add-league-name')).toBeVisible()
 
-  // After reload, admin mode is still active (session storage)
+  // Admin controls persist across reload (coach session in localStorage)
   await page.reload()
   await page.getByTestId('nav-admin').click()
-  await expect(page.getByTestId('admin-password-input')).toHaveCount(0)
   await expect(page.getByTestId('clear-league-data')).toBeVisible()
-
-  // Lock button returns to locked state and hides controls
-  await page.getByTestId('admin-lock-button').click()
-  await expect(page.getByTestId('admin-password-input')).toBeVisible()
-  await expect(page.getByTestId('clear-league-data')).toHaveCount(0)
-  await expect(page.getByTestId('add-league-name')).toHaveCount(0)
 })
 
 test('share copy button copies the correct day message to clipboard', async ({ page, context }) => {
@@ -877,10 +834,7 @@ test('admin notification panel: templates render and message fills textarea', as
   await page.reload()
   await page.getByRole('button', { name: /יאללה נשחק/ }).click({ timeout: 2000 }).catch(() => {})
 
-  // Unlock admin and stay on admin panel
   await page.getByTestId('nav-admin').click()
-  await page.getByTestId('admin-password-input').fill(process.env.VITE_ADMIN_PASSWORD)
-  await page.getByTestId('admin-unlock-button').click()
 
   // All template buttons visible
   await expect(page.getByTestId('notif-template-morning')).toBeVisible()
@@ -922,18 +876,8 @@ test('delete league removes it from the league dropdown', async ({ page }) => {
 
 // ─── PR #10: rank, clean-teams, auto-generate ─────────────────────────────────
 
-test('player rank dropdown is hidden from non-admin and shows A/B/C options for admin', async ({ page }) => {
-  // Without admin — rank select should not be visible on bench players
-  await page.getByTestId('league-select').selectOption('tournament-1')
-  await page.getByTestId('tournament-select').selectOption('2026-03-01')
-
-  const anyChip = page.locator('[data-testid^="player-chip-"]').first()
-  await expect(anyChip).toBeVisible()
-  const chipId = (await anyChip.getAttribute('data-testid')).replace('player-chip-', '')
-  await expect(page.getByTestId(`player-rank-${chipId}`)).toHaveCount(0)
-
-  // With admin — rank select appears with correct default and accepts all ranks
-  await enableAdminMode(page)
+test('player rank dropdown shows A/B/C options and persists changes', async ({ page }) => {
+  // Rank select is always visible for logged-in users
   await page.getByTestId('league-select').selectOption('tournament-2')
   await page.getByTestId('create-tournament-empty').click()
   await addPlayer(page, 'שחקן דירוג')
@@ -1002,7 +946,7 @@ test('auto-generate distributes bench players across teams', async ({ page }) =>
 
 // ─── PR #10: role buttons admin-only ──────────────────────────────────────────
 
-test('offense and defense role buttons are hidden from non-admin', async ({ page }) => {
+test('offense and defense role buttons are visible for logged-in users', async ({ page }) => {
   await page.getByTestId('league-select').selectOption('tournament-1')
   await page.getByTestId('tournament-select').selectOption('2026-03-01')
 
@@ -1010,8 +954,8 @@ test('offense and defense role buttons are hidden from non-admin', async ({ page
   await expect(anyChip).toBeVisible()
   const chipId = (await anyChip.getAttribute('data-testid')).replace('player-chip-', '')
 
-  await expect(page.getByTestId(`player-offense-${chipId}`)).toHaveCount(0)
-  await expect(page.getByTestId(`player-defense-${chipId}`)).toHaveCount(0)
+  await expect(page.getByTestId(`player-offense-${chipId}`)).toBeVisible()
+  await expect(page.getByTestId(`player-defense-${chipId}`)).toBeVisible()
 })
 
 // ─── PR #11: friendly 2 teams, add/remove, max 11 ────────────────────────────

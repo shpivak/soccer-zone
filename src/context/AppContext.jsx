@@ -55,12 +55,15 @@ export const AppProvider = ({ children }) => {
     try {
       const data = await loadDatasetData(dataset)
       const isStaleRequest = requestId !== loadRequestIdRef.current
+      if (isStaleRequest) return
+      // Always mark as loaded so saves aren't blocked — even if the user made
+      // changes while loading (in which case we keep their in-memory version)
+      loadedDatasetRef.current = dataset
       const dataChangedSinceLoadStarted = revisionAtStart !== dataRevisionRef.current
-      if (isStaleRequest || dataChangedSinceLoadStarted) return
+      if (dataChangedSinceLoadStarted) return
       setLeagues(data.leagues)
       setPlayers(data.players)
       setTournaments(data.tournaments)
-      loadedDatasetRef.current = dataset
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load data')
     } finally {

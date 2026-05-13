@@ -10,9 +10,7 @@ import { getLeagueTypeLabel, LEAGUE_TYPES } from './utils/leagueUtils'
 import { generateTeamShareMessage } from './utils/shareUtils'
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD ?? ''
-const ADMIN_SESSION_KEY = 'soccer-zone-admin-auth'
 const COACH_SESSION_KEY = 'soccer-zone-coach-id'
-const adminStorage = localStorage
 
 // ─── Coach definitions (parsed from VITE_COACHES env var) ────────────────────
 // Format: "EnglishId:שםבעברית:password;..." — stored as a GH secret
@@ -241,9 +239,6 @@ function App() {
     setTournaments,
   } = useAppContext()
   const [page, setPage] = useState('live')
-  const [adminMode, setAdminMode] = useState(() => adminStorage.getItem(ADMIN_SESSION_KEY) === 'true')
-  const [adminPasswordInput, setAdminPasswordInput] = useState('')
-  const [adminPasswordError, setAdminPasswordError] = useState(false)
   const [newLeagueName, setNewLeagueName] = useState('')
   const [newLeagueType, setNewLeagueType] = useState(LEAGUE_TYPES.tournament)
   const [scheduleDrawerOpen, setScheduleDrawerOpen] = useState(false)
@@ -267,13 +262,18 @@ function App() {
     setActiveCoachId(null)
   }
 
+  // Admin mode: any logged-in user has full editing rights.
+  // Admin (COACH_ALL) additionally sees all leagues; named coaches see their slice.
+  const adminMode = !!activeCoachId
+
   // Leagues visible to the current coach.
-  // __admin__ sees everything. A named coach sees ONLY leagues explicitly assigned to them.
-  // Leagues with no coachId are admin-only, EXCEPT a league opened via direct ?league= URL
-  // (so sharing a link always works regardless of coachId assignment).
+  // Admin sees everything. Named coach sees:
+  //   - leagues with no coachId (unassigned → visible to all coaches)
+  //   - leagues assigned to them specifically
+  //   - also always shows any ?league= URL param league (for link sharing)
   const visibleLeagues = useMemo(() => {
     if (!activeCoachId || activeCoachId === COACH_ALL) return leagues
-    const coachLeagues = leagues.filter((l) => l.coachId === activeCoachId)
+    const coachLeagues = leagues.filter((l) => !l.coachId || l.coachId === activeCoachId)
     const urlId = urlLeagueIdRef.current
     if (urlId && !coachLeagues.some((l) => l.id === urlId)) {
       const linked = leagues.find((l) => l.id === urlId)
@@ -343,25 +343,6 @@ function App() {
     if (!didHydrateLeagueFromUrlRef.current) return
     syncLeagueIdToUrl(activeLeagueId)
   }, [activeLeagueId, leagues])
-
-  const handleAdminUnlock = () => {
-    if (adminPasswordInput === ADMIN_PASSWORD) {
-      adminStorage.setItem(ADMIN_SESSION_KEY, 'true')
-      setAdminMode(true)
-      setAdminPasswordInput('')
-      setAdminPasswordError(false)
-    } else {
-      setAdminPasswordError(true)
-      setAdminPasswordInput('')
-    }
-  }
-
-  const handleAdminLock = () => {
-    adminStorage.removeItem(ADMIN_SESSION_KEY)
-    setAdminMode(false)
-    setAdminPasswordInput('')
-    setAdminPasswordError(false)
-  }
 
   const handleClearLeague = async () => {
     const approved = window.confirm(`למחוק את כל הנתונים של הליגה ${activeLeague?.name ?? activeLeagueId}?`)
@@ -527,19 +508,7 @@ function App() {
             <h2 className="text-base font-bold">אזור ניהול וכלי מערכת</h2>
             <p className="mt-1 text-sm text-gray-600">פעולות הניהול למטה עובדות על הליגה הנבחרת בלבד.</p>
 
-            {adminMode ? (
-              <>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-                    <span>🔓 Admin mode</span>
-                    <button
-                      onClick={handleAdminLock}
-                      data-testid="admin-lock-button"
-                      className="text-xs text-gray-500 underline hover:text-gray-800"
-                    >
-                      נעל
-                    </button>
-                  </div>
+            <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     onClick={handleClearLeague}
                     data-testid="clear-league-data"
@@ -629,7 +598,7 @@ function App() {
                         data-testid="league-coach-select"
                         className="rounded-xl border px-3 py-2 text-sm md:col-span-3"
                       >
-                        <option value="">ללא מאמן מוגדר (גלוי לכולם / Admin בלבד)</option>
+                        <option value="">ללא מאמן מוגדר (גלוי לכולם)</option>
                         {COACHES.map((c) => (
                           <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
@@ -660,39 +629,7 @@ function App() {
                   teamsMsg={latestTeamsShareMsg}
                   teams={latestTeamsForFixtures}
                 />
-              </>
-            ) : (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="text-sm text-gray-600">Admin mode</span>
-                <input
-                  type="password"
-                  value={adminPasswordInput}
-                  onChange={(event) => {
-                    setAdminPasswordInput(event.target.value)
-                    setAdminPasswordError(false)
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') handleAdminUnlock()
-                  }}
-                  data-testid="admin-password-input"
-                  placeholder="סיסמה"
-                  className={`w-28 rounded-xl border px-3 py-2 text-sm ${adminPasswordError ? 'border-red-400' : ''}`}
-                />
-                <button
-                  onClick={handleAdminUnlock}
-                  data-testid="admin-unlock-button"
-                  className="min-h-[44px] rounded-xl border px-3 py-2 text-sm"
-                >
-                  🔓
-                </button>
-                {adminPasswordError ? (
-                  <span data-testid="admin-password-error" className="text-sm text-red-500">
-                    סיסמה שגויה
-                  </span>
-                ) : null}
-              </div>
-            )}
-          </section>
+            </section>
         )}
       </main>
 
