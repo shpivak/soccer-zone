@@ -1631,10 +1631,10 @@ test('coach badge switch button returns to selection screen', async ({ page }) =
 test('coach filter: leagues without coachId are visible to all; leagues with coachId only to that coach', async ({ page }) => {
   await enableAdminMode(page)
 
-  // Assign regular-1 league to zach; capture its display name first
+  // Navigate to admin panel, select regular-1, capture its display name, then assign to zach
+  await page.getByTestId('nav-admin').click()
   await page.getByTestId('league-select').selectOption('regular-1')
   const leagueName = await page.getByTestId('league-name-input').inputValue()
-  await page.getByTestId('nav-admin').click()
   await page.getByTestId('league-coach-select').selectOption('zach')
   await page.getByTestId('nav-live').click()
 

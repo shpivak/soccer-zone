@@ -217,10 +217,12 @@ function App() {
     setActiveCoachId(null)
   }
 
-  // Leagues visible to the current coach (admin sees all)
+  // Leagues visible to the current coach.
+  // __admin__ sees everything. A named coach sees ONLY leagues explicitly assigned to them.
+  // Leagues with no coachId are admin-only (not shown to individual coaches).
   const visibleLeagues = useMemo(() => {
     if (!activeCoachId || activeCoachId === COACH_ALL) return leagues
-    return leagues.filter((l) => !l.coachId || l.coachId === activeCoachId)
+    return leagues.filter((l) => l.coachId === activeCoachId)
   }, [leagues, activeCoachId])
 
   const activeCoachName = COACHES.find((c) => c.id === activeCoachId)?.name ?? null
@@ -566,12 +568,30 @@ function App() {
                         data-testid="league-coach-select"
                         className="rounded-xl border px-3 py-2 text-sm md:col-span-3"
                       >
-                        <option value="">ללא מאמן מוגדר (גלוי לכולם)</option>
+                        <option value="">ללא מאמן מוגדר (גלוי לכולם / Admin בלבד)</option>
                         {COACHES.map((c) => (
                           <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                       </select>
                     </div>
+                    {/* Schedule planning — regular leagues only */}
+                    {activeLeague.type === LEAGUE_TYPES.regular && (
+                      <div className="mt-3 border-t pt-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPendingLeagueId(activeLeague.id)
+                            setPendingLeagueName(activeLeague.name)
+                            setScheduleDrawerOpen(true)
+                          }}
+                          data-testid="open-schedule-drawer"
+                          className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                        >
+                          📅 תכנון מחזורים
+                        </button>
+                        <p className="mt-1 text-xs text-gray-400">יוצר מחזורים ריקים עם תאריכים מתוכננים</p>
+                      </div>
+                    )}
                   </div>
                 ) : null}
 
