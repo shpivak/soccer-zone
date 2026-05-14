@@ -420,37 +420,41 @@ function App() {
     const teamIds = leagueTeams.map((t) => t.id)
     const rrSchedule = buildRoundRobinSchedule(teamIds, rounds) // array of matchweeks
 
-    // Continue numbering from the highest existing fixture number for this league
-    const existingMax = tournaments
-      .filter((t) => t.leagueId === pendingLeagueId)
-      .reduce((max, t) => Math.max(max, t.leagueNumber ?? 0), 0)
+    const buildStubs = (existingMax) =>
+      Array.from({ length: totalRounds }, (_, i) => {
+        const d = new Date(base)
+        d.setDate(d.getDate() + i * cadence)
+        const date = d.toISOString().slice(0, 10)
+        const isFinalGame = i === totalRounds - 1 && includeFinal
+        const matchweekGames = isFinalGame ? [] : (rrSchedule[i] ?? []).map((pair, gi) => ({
+          id: `game-${now + i}-${gi}`,
+          round: i + 1,
+          teamA: pair.teamA,
+          teamB: pair.teamB,
+          score: { a: 0, b: 0 },
+          played: false,
+          events: [],
+        }))
+        return {
+          id: `${pendingLeagueId}-${now + i}`,
+          name: isFinalGame ? 'גמר' : '',
+          date,
+          leagueNumber: existingMax + i + 1,
+          leagueId: pendingLeagueId,
+          year: new Date(date).getFullYear(),
+          teams: leagueTeams.map((t) => ({ ...t, players: [...(t.players ?? [])] })),
+          games: matchweekGames,
+        }
+      })
 
-    const stubs = Array.from({ length: totalRounds }, (_, i) => {
-      const d = new Date(base)
-      d.setDate(d.getDate() + i * cadence)
-      const date = d.toISOString().slice(0, 10)
-      const isFinalGame = i === totalRounds - 1 && includeFinal
-      const matchweekGames = isFinalGame ? [] : (rrSchedule[i] ?? []).map((pair, gi) => ({
-        id: `game-${now + i}-${gi}`,
-        round: i + 1,
-        teamA: pair.teamA,
-        teamB: pair.teamB,
-        score: { a: 0, b: 0 },
-        played: false,
-        events: [],
-      }))
-      return {
-        id: `${pendingLeagueId}-${now + i}`,
-        name: isFinalGame ? 'גמר' : '',
-        date,
-        leagueNumber: existingMax + i + 1,
-        leagueId: pendingLeagueId,
-        year: new Date(date).getFullYear(),
-        teams: leagueTeams.map((t) => ({ ...t, players: [...(t.players ?? [])] })),
-        games: matchweekGames,
-      }
+    // Use the functional updater so existingMax is computed from the latest state,
+    // not from the render-closure snapshot (avoids all-1 bug when state changed mid-drawer)
+    setTournaments((prev) => {
+      const existingMax = prev
+        .filter((t) => t.leagueId === pendingLeagueId)
+        .reduce((max, t) => Math.max(max, t.leagueNumber ?? 0), 0)
+      return [...prev, ...buildStubs(existingMax)]
     })
-    setTournaments((prev) => [...prev, ...stubs])
     setScheduleDrawerOpen(false)
     setPendingLeagueId(null)
     setPendingLeagueName('')
