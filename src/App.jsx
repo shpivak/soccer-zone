@@ -24,6 +24,32 @@ const parseCoachesFromEnv = () => {
 export const COACHES = parseCoachesFromEnv()
 const COACH_ALL = '__admin__'
 
+// Round-robin schedule builder — returns array of matchweeks, each an array of { teamA, teamB }
+const buildRoundRobinSchedule = (teamIds, cycles) => {
+  if (teamIds.length < 2) return []
+  // For odd number of teams, add a null "bye" slot to make the count even
+  const teams = teamIds.length % 2 === 1 ? [...teamIds, null] : [...teamIds]
+  const m = teams.length
+  const matchweeksPerCycle = m - 1
+  const schedule = []
+  for (let cycle = 0; cycle < cycles; cycle++) {
+    const rotation = teams.slice(1) // elements 1..m-1, will be rotated
+    for (let round = 0; round < matchweeksPerCycle; round++) {
+      const circle = [teams[0], ...rotation]
+      const matchweek = []
+      for (let i = 0; i < m / 2; i++) {
+        const a = circle[i]
+        const b = circle[m - 1 - i]
+        if (a !== null && b !== null) matchweek.push({ teamA: a, teamB: b })
+      }
+      schedule.push(matchweek)
+      // Rotate: last element moves to front
+      rotation.unshift(rotation.pop())
+    }
+  }
+  return schedule
+}
+
 const getCoachIdFromUrl = () => {
   if (typeof window === 'undefined') return null
   return new URLSearchParams(window.location.search).get('coach') ?? null
@@ -388,19 +414,40 @@ function App() {
     const totalRounds = rounds * roundsPerCycle + (includeFinal ? 1 : 0)
     const base = startDate || new Date().toISOString().slice(0, 10)
     const now = Date.now()
+
+    // Build round-robin pairings for the regular (non-final) matchweeks
+    const leagueTeams = leagues.find((l) => l.id === pendingLeagueId)?.teams ?? []
+    const teamIds = leagueTeams.map((t) => t.id)
+    const rrSchedule = buildRoundRobinSchedule(teamIds, rounds) // array of matchweeks
+
+    // Continue numbering from the highest existing fixture number for this league
+    const existingMax = tournaments
+      .filter((t) => t.leagueId === pendingLeagueId)
+      .reduce((max, t) => Math.max(max, t.leagueNumber ?? 0), 0)
+
     const stubs = Array.from({ length: totalRounds }, (_, i) => {
       const d = new Date(base)
       d.setDate(d.getDate() + i * cadence)
       const date = d.toISOString().slice(0, 10)
+      const isFinalGame = i === totalRounds - 1 && includeFinal
+      const matchweekGames = isFinalGame ? [] : (rrSchedule[i] ?? []).map((pair, gi) => ({
+        id: `game-${now + i}-${gi}`,
+        round: i + 1,
+        teamA: pair.teamA,
+        teamB: pair.teamB,
+        score: { a: 0, b: 0 },
+        played: false,
+        events: [],
+      }))
       return {
         id: `${pendingLeagueId}-${now + i}`,
-        name: i === totalRounds - 1 && includeFinal ? 'גמר' : '',
+        name: isFinalGame ? 'גמר' : '',
         date,
-        leagueNumber: i + 1,
+        leagueNumber: existingMax + i + 1,
         leagueId: pendingLeagueId,
         year: new Date(date).getFullYear(),
-        teams: [],
-        games: [],
+        teams: leagueTeams.map((t) => ({ ...t, players: [...(t.players ?? [])] })),
+        games: matchweekGames,
       }
     })
     setTournaments((prev) => [...prev, ...stubs])

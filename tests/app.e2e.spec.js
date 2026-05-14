@@ -1615,6 +1615,27 @@ test('coach filter: leagues without coachId are visible to all; leagues with coa
   expect(optionsZach.some((o) => o.includes(leagueName))).toBeTruthy()
 })
 
+test('coach assignment persists after page reload', async ({ page }) => {
+  await enableAdminMode(page)
+
+  // Assign regular-1 to zach via admin panel
+  await page.getByTestId('nav-admin').click()
+  await page.getByTestId('league-select').selectOption('regular-1')
+  await page.getByTestId('league-coach-select').selectOption('zach')
+
+  // Wait for save to propagate (debounced 300ms + network round-trip)
+  await page.waitForTimeout(2000)
+
+  // Reload the page — coach assignment must survive
+  await page.reload()
+  await page.getByRole('button', { name: /יאללה נשחק/ }).click({ timeout: 2000 }).catch(() => {})
+  await page.getByTestId('nav-admin').click()
+  await page.getByTestId('league-select').selectOption('regular-1')
+
+  // The select should still show 'zach' after reload
+  await expect(page.getByTestId('league-coach-select')).toHaveValue('zach')
+})
+
 // ─── Auto-schedule ─────────────────────────────────────────────────────────────
 // regular-1 has 4 teams → (4-1)=3 game days per round, so 1 round = 3 stubs
 

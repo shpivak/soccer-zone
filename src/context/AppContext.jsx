@@ -157,11 +157,11 @@ export const AppProvider = ({ children }) => {
       clearTimeout(pendingTimerRef.current)
       pendingTimerRef.current = null
       if (loadedDatasetRef.current !== DEFAULT_DATASET) return
-      // Fire-and-forget — fetch uses keepalive:true so the browser completes
-      // the requests even after the page closes
-      saveLeagues(DEFAULT_DATASET, leaguesRef.current).catch(() => {})
-      savePlayers(DEFAULT_DATASET, playersRef.current).catch(() => {})
-      saveTournaments(DEFAULT_DATASET, tournamentsRef.current).catch(() => {})
+      // keepalive:true lets the browser complete requests even after the page closes
+      const opts = { keepalive: true }
+      saveLeagues(DEFAULT_DATASET, leaguesRef.current, opts).catch(() => {})
+      savePlayers(DEFAULT_DATASET, playersRef.current, opts).catch(() => {})
+      saveTournaments(DEFAULT_DATASET, tournamentsRef.current, opts).catch(() => {})
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)

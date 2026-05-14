@@ -117,6 +117,7 @@ export const generateDayShareMessage = (
 
   if (includeResults) {
     const resultsLines = games
+      .filter((game) => game.played !== false)
       .map((game) => {
         const line = `${getTeamName(game.teamA)} ${game.score.a} – ${game.score.b} ${getTeamName(game.teamB)}`
         return game.description ? `${line}\n   📝 ${game.description}` : line

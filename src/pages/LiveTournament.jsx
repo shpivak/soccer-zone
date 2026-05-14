@@ -113,6 +113,7 @@ const getTournamentTopStats = (games, players) => {
   const goalCount = {}
   const assistCount = {}
   for (const game of games) {
+    if (game.played === false) continue
     for (const event of game.events ?? []) {
       if (event.scorer) goalCount[event.scorer] = (goalCount[event.scorer] ?? 0) + 1
       if (event.assister) assistCount[event.assister] = (assistCount[event.assister] ?? 0) + 1
@@ -393,18 +394,13 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
   const handleSaveGame = (game) => {
     if (!adminMode || !selectedTournament || !league) return
     setGameInputMessage('')
+    const savedGame = { ...game, played: true }
     updateSelectedTournament((tournament) => {
       const exists = tournament.games.some((item) => item.id === game.id)
       if (exists) {
-        return { games: tournament.games.map((item) => (item.id === game.id ? game : item)) }
+        return { games: tournament.games.map((item) => (item.id === game.id ? savedGame : item)) }
       }
-      // No game limit for now
-      // const gameLimit = getSessionGamesLimit(league)
-      // if (tournament.games.length >= gameLimit) {
-      //   setGameInputMessage(labels.maxGamesMessage(gameLimit))
-      //   return { games: tournament.games }
-      // }
-      return { games: [...tournament.games, { ...game, round: tournament.games.length + 1 }] }
+      return { games: [...tournament.games, { ...savedGame, round: tournament.games.length + 1 }] }
     })
     setEditingGame(null)
   }
@@ -662,7 +658,7 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
               className="shrink-0 min-h-[44px] rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-700 hover:bg-blue-100"
               title="תכנן מחזורים עתידיים"
             >
-              📅
+              📅 שבץ קדימה
             </button>
           )}
           <button
@@ -759,6 +755,21 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
           </div>
         ) : null}
       </div>
+
+      {/* Games in this fixture — shown above game input so planned matchups are visible */}
+      <CollapsibleSection
+        title={`משחקים ב${getSessionLabel(league)} (${selectedTournament.games.length})`}
+        headerExtra={undoButton}
+      >
+        <TournamentTable
+          league={league}
+          games={selectedTournament.games}
+          teams={selectedTournament.teams}
+          readOnly={!isGameEditingAllowed}
+          onEdit={setEditingGame}
+          onDelete={handleDeleteGame}
+        />
+      </CollapsibleSection>
 
       {/* Game input */}
       <GameInput
@@ -955,21 +966,6 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
           />
         </CollapsibleSection>
       )}
-
-      {/* Previous games — collapsible drawer */}
-      <CollapsibleSection
-        title={`משחקים ב${getSessionLabel(league)} (${selectedTournament.games.length})`}
-        headerExtra={undoButton}
-      >
-        <TournamentTable
-          league={league}
-          games={selectedTournament.games}
-          teams={selectedTournament.teams}
-          readOnly={!isGameEditingAllowed}
-          onEdit={setEditingGame}
-          onDelete={handleDeleteGame}
-        />
-      </CollapsibleSection>
 
       {/* Per-session top scorer / assister */}
       {tournamentTopStats && (

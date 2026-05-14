@@ -1,6 +1,7 @@
 import { LEAGUE_TYPES, getTeamDisplayName } from './leagueUtils'
 
 export const getGameWinner = (game) => {
+  if (game.played === false) return null
   if (game.score.a > game.score.b) return game.teamA
   if (game.score.b > game.score.a) return game.teamB
   return null
@@ -20,6 +21,7 @@ const createStandingsRow = (team) => ({
 })
 
 const applyGameToStandings = (standingsMap, game, pointsConfig) => {
+  if (game.played === false) return
   const teamAStats = standingsMap.get(game.teamA)
   const teamBStats = standingsMap.get(game.teamB)
   if (!teamAStats || !teamBStats) return
@@ -115,6 +117,7 @@ export const calculatePlayerStats = (players, sessions, pointsConfig, leagueType
     })
 
     session.games.forEach((game) => {
+      if (game.played === false) return
       const teamA = teamGamesSummary.get(game.teamA)
       const teamB = teamGamesSummary.get(game.teamB)
       if (!teamA || !teamB) return
