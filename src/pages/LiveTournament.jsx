@@ -740,7 +740,6 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <ShareButton message={dayShareMsg} label="שתף תוצאות היום" name="day" />
             <ShareButton message={combinedShareMsg} label="שתף יום + סטט׳ ליגה" name="combined" />
-            {/* TODO: re-enable once image generation is fixed
             <button
               type="button"
               onClick={() => openGenerateModal('live')}
@@ -751,7 +750,6 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
               <span>✨</span>
               <span className="hidden sm:inline">ייצר תמונה</span>
             </button>
-            */}
           </div>
         ) : null}
       </div>
@@ -875,9 +873,7 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
           headerExtra={
             <div className="flex items-center gap-2">
               <ShareButton message={teamsShareMsg} label="שתף סגלים" name="teams" />
-              {/* TODO: re-enable once image generation is fixed
               <button type="button" onClick={() => openGenerateModal('squads')} data-testid="generate-image-btn-squads" className="rounded-lg bg-purple-600 p-2 text-white hover:bg-purple-700" title="ייצר תמונת סגלים">✨</button>
-              */}
               <button
                 onClick={openAddTeamForm}
                 disabled={!adminMode || addTeamFormOpen}
@@ -923,9 +919,7 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
           headerExtra={
             <div className="flex items-center gap-2">
               <ShareButton message={teamsShareMsg} label="שתף סגלים" name="teams" />
-              {/* TODO: re-enable once image generation is fixed
               <button type="button" onClick={() => openGenerateModal('squads')} data-testid="generate-image-btn-squads" className="rounded-lg bg-purple-600 p-2 text-white hover:bg-purple-700" title="ייצר תמונת סגלים">✨</button>
-              */}
               <button
                 onClick={openAddTeamForm}
                 disabled={!adminMode || addTeamFormOpen}

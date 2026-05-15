@@ -33,5 +33,8 @@ jobs:
         env:
           VITE_DEFAULT_DATASET: test
           VITE_ADMIN_PASSWORD: ${{ secrets.VITE_ADMIN_PASSWORD }}
+          # Image generation tests run on push to main only, not on PRs
+          RUN_IMAGE_TESTS: ${{ github.event_name == 'push' && 'true' || '' }}
+          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
         run: npm run test:e2e
 

@@ -65,7 +65,6 @@ const Stats = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-              {/* TODO: re-enable once image generation is fixed
               <button
                 type="button"
                 onClick={() => setShowGenerateModal(true)}
@@ -76,7 +75,6 @@ const Stats = () => {
                 <span>✨</span>
                 <span className="hidden sm:inline">ייצר תמונה</span>
               </button>
-              */}
               <ShareButton message={overallShareMsg} label="שתף סטט׳ ליגה" name="overall" />
             </div>
         </div>

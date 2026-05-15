@@ -1404,157 +1404,165 @@ const mockGeminiError = (page, message = 'API_KEY_INVALID') =>
     }),
   )
 
-test.skip('generate image modal (stats page) — option selection, loading, result, back, close', async ({ page }) => {
-  await mockGeminiSuccess(page)
-  await navigateToStatsAndOpenModal(page)
+// Image generation tests are gated by RUN_IMAGE_TESTS=true.
+// Set in .env.local for local runs; CI sets it only on push to main (not PRs).
+test.describe('Generate Image Modal', () => {
+  test.beforeEach(() => {
+    test.skip(!process.env.RUN_IMAGE_TESTS, 'Image generation — run locally or on main push only (set RUN_IMAGE_TESTS=true)')
+  })
 
-  // Stats page shows stats-table as 3rd option (not day-results)
-  await expect(page.getByTestId('generate-option-stats-table')).toBeVisible()
+  test('stats page — option selection, loading, result, back, close', async ({ page }) => {
+    await mockGeminiSuccess(page)
+    await navigateToStatsAndOpenModal(page)
 
-  // Generate button disabled until an option is selected
-  await expect(page.getByTestId('generate-submit')).toBeDisabled()
-  await page.getByTestId('generate-option-mvp').click()
-  await expect(page.getByTestId('generate-submit')).toBeEnabled()
+    // Stats page shows stats-table as 3rd option (not day-results)
+    await expect(page.getByTestId('generate-option-stats-table')).toBeVisible()
 
-  // Generate — spinner then result image
-  await page.getByTestId('generate-submit').click()
-  await expect(page.getByTestId('generate-loading')).toBeVisible()
-  await expect(page.getByTestId('generate-result-image')).toBeVisible({ timeout: 5000 })
-  await expect(page.getByTestId('generate-download')).toBeVisible()
+    // Generate button disabled until an option is selected
+    await expect(page.getByTestId('generate-submit')).toBeDisabled()
+    await page.getByTestId('generate-option-mvp').click()
+    await expect(page.getByTestId('generate-submit')).toBeEnabled()
 
-  // Back returns to option picker
-  await page.getByTestId('generate-back').click()
-  await expect(page.getByTestId('generate-option-mvp')).toBeVisible()
+    // Generate — spinner then result image
+    await page.getByTestId('generate-submit').click()
+    await expect(page.getByTestId('generate-loading')).toBeVisible()
+    await expect(page.getByTestId('generate-result-image')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByTestId('generate-download')).toBeVisible()
 
-  // Close dismisses modal
-  await page.getByTestId('generate-image-close').click()
-  await expect(page.getByTestId('generate-image-modal')).toHaveCount(0)
-})
+    // Back returns to option picker
+    await page.getByTestId('generate-back').click()
+    await expect(page.getByTestId('generate-option-mvp')).toBeVisible()
 
-test.skip('generate image modal (live mode) — shows day-results option, generates image', async ({ page }) => {
-  await mockGeminiSuccess(page)
+    // Close dismisses modal
+    await page.getByTestId('generate-image-close').click()
+    await expect(page.getByTestId('generate-image-modal')).toHaveCount(0)
+  })
 
-  // Navigate to a tournament with games so the generate button appears
-  await page.getByTestId('league-select').selectOption('tournament-3')
-  // generate button only appears once there are games
-  await page.getByTestId('generate-image-btn-live').click()
-  await expect(page.getByTestId('generate-image-modal')).toBeVisible()
+  test('live mode — shows day-results option, generates image', async ({ page }) => {
+    await mockGeminiSuccess(page)
 
-  // Live mode shows "תוצאות היום" as 3rd option, not "טבלת סטטיסטיקות"
-  await expect(page.getByTestId('generate-option-day-results')).toBeVisible()
-  await expect(page.getByTestId('generate-option-stats-table')).toHaveCount(0)
+    // Navigate to a tournament with games so the generate button appears
+    await page.getByTestId('league-select').selectOption('tournament-3')
+    // generate button only appears once there are games
+    await page.getByTestId('generate-image-btn-live').click()
+    await expect(page.getByTestId('generate-image-modal')).toBeVisible()
 
-  // Generate the day-results image
-  await page.getByTestId('generate-option-day-results').click()
-  await page.getByTestId('generate-submit').click()
-  await expect(page.getByTestId('generate-result-image')).toBeVisible({ timeout: 5000 })
-})
+    // Live mode shows "תוצאות היום" as 3rd option, not "טבלת סטטיסטיקות"
+    await expect(page.getByTestId('generate-option-day-results')).toBeVisible()
+    await expect(page.getByTestId('generate-option-stats-table')).toHaveCount(0)
 
-test.skip('generate image modal — shows error message when Gemini API fails', async ({ page }) => {
-  await mockGeminiError(page)
-  await navigateToStatsAndOpenModal(page)
-  await page.getByTestId('generate-option-stats-table').click()
-  await page.getByTestId('generate-submit').click()
+    // Generate the day-results image
+    await page.getByTestId('generate-option-day-results').click()
+    await page.getByTestId('generate-submit').click()
+    await expect(page.getByTestId('generate-result-image')).toBeVisible({ timeout: 5000 })
+  })
 
-  await expect(page.getByTestId('generate-error')).toBeVisible()
-  await expect(page.getByTestId('generate-error')).toContainText('API_KEY_INVALID')
-  // Can retry after error — option picker still visible
-  await expect(page.getByTestId('generate-option-stats-table')).toBeVisible()
-})
+  test('shows error message when Gemini API fails', async ({ page }) => {
+    await mockGeminiError(page)
+    await navigateToStatsAndOpenModal(page)
+    await page.getByTestId('generate-option-stats-table').click()
+    await page.getByTestId('generate-submit').click()
 
-test.skip('generate image modal — real Gemini API call: image or graceful error shown', async ({ page }) => {
-  // No route mocking — uses VITE_GEMINI_API_KEY from .env.local.
-  // Passes if Gemini returns an image OR if quota/billing blocks it and an error message is shown.
-  await navigateToStatsAndOpenModal(page)
-  await page.getByTestId('generate-option-mvp').click()
-  await page.getByTestId('generate-submit').click()
-
-  await expect(page.getByTestId('generate-loading')).toBeVisible()
-
-  // Wait for either a generated image or an error message (e.g. quota exceeded)
-  await expect(
-    page.locator('[data-testid="generate-result-image"], [data-testid="generate-error"]')
-  ).toBeVisible({ timeout: 30000 })
-
-  const hasImage = await page.getByTestId('generate-result-image').isVisible()
-  if (hasImage) {
-    const src = await page.getByTestId('generate-result-image').getAttribute('src')
-    expect(src).toMatch(/^data:image\//)
-  } else {
-    // Quota / API error — verify a human-readable message is shown
     await expect(page.getByTestId('generate-error')).toBeVisible()
-  }
-})
+    await expect(page.getByTestId('generate-error')).toContainText('API_KEY_INVALID')
+    // Can retry after error — option picker still visible
+    await expect(page.getByTestId('generate-option-stats-table')).toBeVisible()
+  })
 
-test.skip('generate image modal — edit prompt drawer shows and lets user change the prompt', async ({ page }) => {
-  await mockGeminiSuccess(page)
-  await navigateToStatsAndOpenModal(page)
+  test('real Gemini API call: image or graceful error shown', async ({ page }) => {
+    // No route mocking — uses VITE_GEMINI_API_KEY from .env.local.
+    // Passes if Gemini returns an image OR if quota/billing blocks it and an error message is shown.
+    await navigateToStatsAndOpenModal(page)
+    await page.getByTestId('generate-option-mvp').click()
+    await page.getByTestId('generate-submit').click()
 
-  // Edit prompt toggle not visible until an option is selected
-  await expect(page.getByTestId('edit-prompt-toggle')).toHaveCount(0)
+    await expect(page.getByTestId('generate-loading')).toBeVisible()
 
-  await page.getByTestId('generate-option-mvp').click()
+    // Wait for either a generated image or an error message (e.g. quota exceeded)
+    await expect(
+      page.locator('[data-testid="generate-result-image"], [data-testid="generate-error"]')
+    ).toBeVisible({ timeout: 30000 })
 
-  // Toggle appears after selection
-  await expect(page.getByTestId('edit-prompt-toggle')).toBeVisible()
-  await expect(page.getByTestId('edit-prompt-textarea')).toHaveCount(0)
+    const hasImage = await page.getByTestId('generate-result-image').isVisible()
+    if (hasImage) {
+      const src = await page.getByTestId('generate-result-image').getAttribute('src')
+      expect(src).toMatch(/^data:image\//)
+    } else {
+      // Quota / API error — verify a human-readable message is shown
+      await expect(page.getByTestId('generate-error')).toBeVisible()
+    }
+  })
 
-  // Open the drawer
-  await page.getByTestId('edit-prompt-toggle').click()
-  await expect(page.getByTestId('edit-prompt-textarea')).toBeVisible()
+  test('edit prompt drawer shows and lets user change the prompt', async ({ page }) => {
+    await mockGeminiSuccess(page)
+    await navigateToStatsAndOpenModal(page)
 
-  // Textarea pre-populated with a Hebrew prompt
-  const initialPrompt = await page.getByTestId('edit-prompt-textarea').inputValue()
-  expect(initialPrompt.length).toBeGreaterThan(10)
+    // Edit prompt toggle not visible until an option is selected
+    await expect(page.getByTestId('edit-prompt-toggle')).toHaveCount(0)
 
-  // Edit the prompt
-  await page.getByTestId('edit-prompt-textarea').fill('צור תמונה פשוטה של כדורגל')
+    await page.getByTestId('generate-option-mvp').click()
 
-  // Generate uses the edited prompt (Gemini mock confirms the call was made)
-  await page.getByTestId('generate-submit').click()
-  await expect(page.getByTestId('generate-result-image')).toBeVisible({ timeout: 5000 })
+    // Toggle appears after selection
+    await expect(page.getByTestId('edit-prompt-toggle')).toBeVisible()
+    await expect(page.getByTestId('edit-prompt-textarea')).toHaveCount(0)
 
-  // Close drawer — toggle closes it
-  await page.getByTestId('generate-back').click()
-  await page.getByTestId('generate-option-mvp').click()
-  await page.getByTestId('edit-prompt-toggle').click()
-  await page.getByTestId('edit-prompt-toggle').click()
-  await expect(page.getByTestId('edit-prompt-textarea')).toHaveCount(0)
-})
+    // Open the drawer
+    await page.getByTestId('edit-prompt-toggle').click()
+    await expect(page.getByTestId('edit-prompt-textarea')).toBeVisible()
 
-test.skip('generate image modal — squads mode: no option picker, auto-selects squads, edit prompt works', async ({ page }) => {
-  await mockGeminiSuccess(page)
+    // Textarea pre-populated with a Hebrew prompt
+    const initialPrompt = await page.getByTestId('edit-prompt-textarea').inputValue()
+    expect(initialPrompt.length).toBeGreaterThan(10)
 
-  // Open squads modal from the tournament team builder section
-  await page.getByTestId('league-select').selectOption('tournament-3')
-  await page.getByTestId('generate-image-btn-squads').click()
-  await expect(page.getByTestId('generate-image-modal')).toBeVisible()
+    // Edit the prompt
+    await page.getByTestId('edit-prompt-textarea').fill('צור תמונה פשוטה של כדורגל')
 
-  // No option picker in squads mode
-  await expect(page.getByTestId('generate-option-winning-team')).toHaveCount(0)
-  await expect(page.getByTestId('generate-option-mvp')).toHaveCount(0)
+    // Generate uses the edited prompt (Gemini mock confirms the call was made)
+    await page.getByTestId('generate-submit').click()
+    await expect(page.getByTestId('generate-result-image')).toBeVisible({ timeout: 5000 })
 
-  // Edit prompt toggle immediately visible (squads auto-selected)
-  await expect(page.getByTestId('edit-prompt-toggle')).toBeVisible()
+    // Close drawer — toggle closes it
+    await page.getByTestId('generate-back').click()
+    await page.getByTestId('generate-option-mvp').click()
+    await page.getByTestId('edit-prompt-toggle').click()
+    await page.getByTestId('edit-prompt-toggle').click()
+    await expect(page.getByTestId('edit-prompt-textarea')).toHaveCount(0)
+  })
 
-  // Open drawer and verify prompt contains team/squad content
-  await page.getByTestId('edit-prompt-toggle').click()
-  const prompt = await page.getByTestId('edit-prompt-textarea').inputValue()
-  expect(prompt).toContain('סגלי הקבוצות')
+  test('squads mode: no option picker, auto-selects squads, edit prompt works', async ({ page }) => {
+    await mockGeminiSuccess(page)
 
-  // Generate works directly
-  await page.getByTestId('generate-submit').click()
-  await expect(page.getByTestId('generate-result-image')).toBeVisible({ timeout: 5000 })
-})
+    // Open squads modal from the tournament team builder section
+    await page.getByTestId('league-select').selectOption('tournament-3')
+    await page.getByTestId('generate-image-btn-squads').click()
+    await expect(page.getByTestId('generate-image-modal')).toBeVisible()
 
-test.skip('generate image modal — squads button available in friendly and regular team sections', async ({ page }) => {
-  // Friendly league
-  await page.getByTestId('league-select').selectOption('friendly-1')
-  await expect(page.getByTestId('generate-image-btn-squads')).toBeVisible()
+    // No option picker in squads mode
+    await expect(page.getByTestId('generate-option-winning-team')).toHaveCount(0)
+    await expect(page.getByTestId('generate-option-mvp')).toHaveCount(0)
 
-  // Regular league
-  await page.getByTestId('league-select').selectOption('regular-1')
-  await expect(page.getByTestId('generate-image-btn-squads')).toBeVisible()
+    // Edit prompt toggle immediately visible (squads auto-selected)
+    await expect(page.getByTestId('edit-prompt-toggle')).toBeVisible()
+
+    // Open drawer and verify prompt contains team/squad content
+    await page.getByTestId('edit-prompt-toggle').click()
+    const prompt = await page.getByTestId('edit-prompt-textarea').inputValue()
+    expect(prompt).toContain('סגלי הקבוצות')
+
+    // Generate works directly
+    await page.getByTestId('generate-submit').click()
+    await expect(page.getByTestId('generate-result-image')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('squads button available in friendly and regular team sections', async ({ page }) => {
+    // Friendly league
+    await page.getByTestId('league-select').selectOption('friendly-1')
+    await expect(page.getByTestId('generate-image-btn-squads')).toBeVisible()
+
+    // Regular league
+    await page.getByTestId('league-select').selectOption('regular-1')
+    await expect(page.getByTestId('generate-image-btn-squads')).toBeVisible()
+  })
 })
 
 // ─── Coach selection ───────────────────────────────────────────────────────────
