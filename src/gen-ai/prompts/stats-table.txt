@@ -1,0 +1,20 @@
+Generate a beautifully designed stats infographic for a soccer league summary.
+
+Context:
+- League: {{leagueName}}
+- Season: {{seasonLabel}}
+- Top Scorers: {{topScorers}}
+- Top Assisters: {{topAssisters}}
+- Best Defenders: {{bestDefenders}}
+- League Standings (top 3): {{standings}}
+- Date: {{date}}
+
+Style:
+- Clean, modern sports infographic design
+- Dark background with vibrant accent colors (green/gold)
+- Sections for: Top Scorers, Top Assisters, Best Defenders, League Table
+- Player names with their stats displayed clearly
+- Medal emojis (🥇🥈🥉) for rankings
+- "Soccer Zone" branding prominent
+- Social-media-ready layout
+- Soccer ball decorative elements

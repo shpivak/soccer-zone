@@ -1,0 +1,19 @@
+Generate a dynamic MVP (Most Valuable Player) spotlight image for a soccer league.
+
+Context:
+- League: {{leagueName}}
+- MVP Player: {{playerName}}
+- Goals: {{goals}}
+- Assists: {{assists}}
+- Games Won: {{gamesWon}}
+- Tournaments Won: {{tournamentsWon}}
+- Season: {{seasonLabel}}
+
+Style:
+- Heroic, dramatic lighting focused on the MVP
+- Player name in large bold text with a golden/trophy theme
+- Key stats displayed as badges (goals, assists, wins)
+- "Soccer Zone MVP" branding
+- Celebratory but elegant design
+- Modern sports graphic aesthetic
+- Stars and spotlights in background

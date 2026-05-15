@@ -14,6 +14,7 @@ const isMissingPlayerRoleColumnsError = (error) =>
 
 // null = unknown, true/false = cached result for the lifetime of the page
 let playerRoleColumnsSupported = null
+let leagueCoachIdColumnSupported = null
 
 const toPlayerRowBasic = (player) => ({
   id: player.id,
@@ -24,6 +25,9 @@ const toPlayerRowBasic = (player) => ({
 const isMissingTableError = (error, tableName) =>
   error instanceof Error && error.message.includes(`Could not find the table`) && error.message.includes(tableName)
 
+const isMissingCoachIdColumnError = (error) =>
+  error instanceof Error && error.message.includes('coach_id') && error.message.includes('column')
+
 const toLeagueRow = (league) => ({
   id: league.id,
   name: league.name,
@@ -31,6 +35,7 @@ const toLeagueRow = (league) => ({
   season_label: league.seasonLabel ?? '',
   allow_roster_edits: league.allowRosterEdits === true,
   teams: league.teams ?? [],
+  ...(leagueCoachIdColumnSupported !== false ? { coach_id: league.coachId ?? null } : {}),
 })
 
 const fromLeagueRow = (row) => ({
@@ -40,6 +45,7 @@ const fromLeagueRow = (row) => ({
   seasonLabel: row.season_label ?? '',
   allowRosterEdits: row.allow_roster_edits === true,
   teams: Array.isArray(row.teams) ? row.teams : [],
+  ...(row.coach_id ? { coachId: row.coach_id } : {}),
 })
 
 const toPlayerRow = (player) => ({
@@ -86,10 +92,12 @@ const MATCH_META_TYPE = '_meta'
 const toMatchRows = (tournaments) =>
   tournaments.flatMap((tournament) =>
     (tournament.games ?? []).map((game) => {
-      const meta =
-        game.description || game.clockSeconds
-          ? [{ type: MATCH_META_TYPE, description: game.description ?? null, clockSeconds: game.clockSeconds ?? 0 }]
-          : []
+      // played===false is stored in the _meta entry so no DB schema change is needed
+      const isPlayed = game.played !== false
+      const needsMeta = game.description || game.clockSeconds || !isPlayed
+      const meta = needsMeta
+        ? [{ type: MATCH_META_TYPE, description: game.description ?? null, clockSeconds: game.clockSeconds ?? 0, played: isPlayed }]
+        : []
       return {
         id: game.id,
         tournament_id: tournament.id,
@@ -97,7 +105,7 @@ const toMatchRows = (tournaments) =>
         round: game.round ?? 1,
         team_a: game.teamA,
         team_b: game.teamB,
-        score: game.score,
+        score: game.score ?? { a: 0, b: 0 },
         events: [...meta, ...(game.events ?? [])],
       }
     }),
@@ -107,12 +115,15 @@ const fromMatchRow = (row) => {
   const allEvents = Array.isArray(row.events) ? row.events : []
   const meta = allEvents.find((e) => e.type === MATCH_META_TYPE)
   const events = allEvents.filter((e) => e.type !== MATCH_META_TYPE)
+  // played defaults to true for backward compat (existing games without the flag were all played)
+  const played = meta ? meta.played !== false : true
   return {
     id: row.id,
     round: row.round ?? 1,
     teamA: row.team_a,
     teamB: row.team_b,
     score: row.score ?? { a: 0, b: 0 },
+    played,
     clockSeconds: meta?.clockSeconds ?? 0,
     events,
     ...(meta?.description ? { description: meta.description } : {}),
@@ -137,8 +148,6 @@ const withMatchesAttached = (tournaments, matchRows) => {
     ),
   }))
 }
-
-const isWriteMethod = (method) => method !== 'GET' && method !== 'HEAD'
 
 const buildIdInFilter = (ids) => `id=in.(${ids.map((id) => encodeURIComponent(id)).join(',')})`
 
@@ -181,7 +190,7 @@ const request = async (dataset, path, init = {}) => {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
       ...init,
       method,
-      keepalive: init.keepalive ?? isWriteMethod(method),
+      keepalive: init.keepalive ?? false,
       headers: {
         ...buildHeaders(dataset, method),
         ...(init.headers ?? {}),
@@ -224,16 +233,30 @@ export const loadDatasetFromSupabase = async (dataset) => {
       return request(dataset, `${PLAYERS_TABLE}?select=id,name,league_id&order=name.asc`)
     }
   }
+  const fetchLeagues = async () => {
+    const fetchWithCoachId = () =>
+      request(dataset, `${LEAGUES_TABLE}?select=id,name,type,season_label,allow_roster_edits,teams,coach_id&order=name.asc`)
+    const fetchWithoutCoachId = () =>
+      request(dataset, `${LEAGUES_TABLE}?select=id,name,type,season_label,allow_roster_edits,teams&order=name.asc`)
+
+    if (leagueCoachIdColumnSupported === false) return fetchWithoutCoachId()
+
+    try {
+      const rows = await fetchWithCoachId()
+      leagueCoachIdColumnSupported = true
+      return rows
+    } catch (error) {
+      if (isMissingCoachIdColumnError(error)) {
+        leagueCoachIdColumnSupported = false
+        return fetchWithoutCoachId()
+      }
+      if (isMissingTableError(error, LEAGUES_TABLE)) return defaultLeagues
+      throw error
+    }
+  }
+
   const playerPromise = fetchPlayers()
-  const leaguesPromise = request(
-    dataset,
-    `${LEAGUES_TABLE}?select=id,name,type,season_label,allow_roster_edits,teams&order=name.asc`,
-  ).catch(
-    (error) => {
-      if (!isMissingTableError(error, LEAGUES_TABLE)) throw error
-      return defaultLeagues
-    },
-  )
+  const leaguesPromise = fetchLeagues()
 
   try {
     const [leaguesRows, playerRows, tournamentRows, matchRows] = await Promise.all([
@@ -274,25 +297,36 @@ export const loadDatasetFromSupabase = async (dataset) => {
   }
 }
 
-export const saveLeaguesToSupabase = async (dataset, leagues) => {
-  try {
-    if (leagues.length > 0) {
+export const saveLeaguesToSupabase = async (dataset, leagues, { keepalive = false } = {}) => {
+  const postLeagues = async (rows) => {
+    if (rows.length > 0) {
       await request(dataset, LEAGUES_TABLE, {
         method: 'POST',
+        keepalive,
         headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
-        body: JSON.stringify(leagues.map(toLeagueRow)),
+        body: JSON.stringify(rows),
       })
     }
+  }
+  try {
+    await postLeagues(leagues.map(toLeagueRow))
     await deleteRemovedRows(dataset, LEAGUES_TABLE, new Set(leagues.map((league) => league.id)))
   } catch (error) {
+    if (isMissingCoachIdColumnError(error)) {
+      leagueCoachIdColumnSupported = false
+      await postLeagues(leagues.map(toLeagueRow)) // retry without coach_id (flag now false)
+      await deleteRemovedRows(dataset, LEAGUES_TABLE, new Set(leagues.map((league) => league.id)))
+      return
+    }
     if (!isMissingTableError(error, LEAGUES_TABLE)) throw error
   }
 }
 
-export const savePlayersToSupabase = async (dataset, players) => {
+export const savePlayersToSupabase = async (dataset, players, { keepalive = false } = {}) => {
   if (players.length > 0) {
     const postOptions = (rows) => ({
       method: 'POST',
+      keepalive,
       headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
       body: JSON.stringify(rows),
     })
@@ -314,7 +348,7 @@ export const savePlayersToSupabase = async (dataset, players) => {
   await deleteRemovedRows(dataset, PLAYERS_TABLE, new Set(players.map((player) => player.id)))
 }
 
-export const saveTournamentsToSupabase = async (dataset, tournaments) => {
+export const saveTournamentsToSupabase = async (dataset, tournaments, { keepalive = false } = {}) => {
   const tournamentRows = tournaments.map(toTournamentRow)
   const matchRows = toMatchRows(tournaments)
 
@@ -322,6 +356,7 @@ export const saveTournamentsToSupabase = async (dataset, tournaments) => {
     if (tournamentRows.length > 0) {
       await request(dataset, TOURNAMENTS_TABLE, {
         method: 'POST',
+        keepalive,
         headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
         body: JSON.stringify(tournamentRows),
       })
@@ -330,6 +365,7 @@ export const saveTournamentsToSupabase = async (dataset, tournaments) => {
     if (matchRows.length > 0) {
       await request(dataset, MATCHES_TABLE, {
         method: 'POST',
+        keepalive,
         headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
         body: JSON.stringify(matchRows),
       })
@@ -347,6 +383,7 @@ export const saveTournamentsToSupabase = async (dataset, tournaments) => {
   if (tournaments.length > 0) {
     await request(dataset, TOURNAMENTS_TABLE, {
       method: 'POST',
+      keepalive,
       headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
       body: JSON.stringify(
         tournaments.map((tournament) => ({

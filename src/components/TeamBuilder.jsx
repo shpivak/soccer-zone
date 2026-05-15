@@ -437,10 +437,13 @@ const SelectingView = ({
   onChangePlayerRank,
   onTogglePlayerRole,
   onRemoveTeam,
+  onChangeTeamName,
 }) => {
   const [pendingAssignments, setPendingAssignments] = useState(() => computeAssignments(teams, players))
   const [hasChanges, setHasChanges] = useState(false)
   const [sortMode, setSortMode] = useState('none')
+  const [editingTeamNameId, setEditingTeamNameId] = useState(null)
+  const [editingTeamNameValue, setEditingTeamNameValue] = useState('')
 
   const getEffectiveTeamId = (playerId) => pendingAssignments.get(playerId) ?? null
 
@@ -557,6 +560,7 @@ const SelectingView = ({
         {teams.map((team) => {
           const count = pendingCountByTeam.get(team.id) ?? 0
           const overMax = maxPlayersPerTeam && count >= maxPlayersPerTeam
+          const isEditingName = editingTeamNameId === team.id
           return (
             <div
               key={team.id}
@@ -564,13 +568,45 @@ const SelectingView = ({
               data-testid={`team-card-${team.id}`}
             >
               <div className="flex items-center justify-between gap-1">
-                <span className="min-w-0 truncate text-sm font-semibold">{getTeamDisplayName(team)}</span>
+                {isEditingName ? (
+                  <input
+                    autoFocus
+                    value={editingTeamNameValue}
+                    onChange={(e) => setEditingTeamNameValue(e.target.value)}
+                    onBlur={() => {
+                      if (editingTeamNameValue.trim()) onChangeTeamName?.(team.id, editingTeamNameValue.trim())
+                      setEditingTeamNameId(null)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === 'Escape') {
+                        if (e.key === 'Enter' && editingTeamNameValue.trim()) onChangeTeamName?.(team.id, editingTeamNameValue.trim())
+                        setEditingTeamNameId(null)
+                      }
+                    }}
+                    data-testid={`team-name-input-${team.id}`}
+                    className="min-w-0 flex-1 rounded-md border bg-white px-2 py-0.5 text-sm"
+                  />
+                ) : (
+                  <span className="min-w-0 truncate text-sm font-semibold">{getTeamDisplayName(team)}</span>
+                )}
                 <span
                   className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${overMax ? 'bg-red-100 text-red-700' : 'bg-white/70 text-gray-600'}`}
                   data-testid={`team-player-count-${team.id}`}
                 >
                   {count}{maxPlayersPerTeam ? `/${maxPlayersPerTeam}` : ''}
                 </span>
+                {adminMode && onChangeTeamName && !isEditingName ? (
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => { setEditingTeamNameValue(team.name ?? ''); setEditingTeamNameId(team.id) }}
+                    data-testid={`team-name-edit-${team.id}`}
+                    className="shrink-0 rounded-md px-1 py-0.5 text-xs text-gray-400 hover:text-gray-700 disabled:opacity-40"
+                    title="ערוך שם קבוצה"
+                  >
+                    ✏️
+                  </button>
+                ) : null}
                 {adminMode && onRemoveTeam ? (
                   <button
                     type="button"
@@ -842,6 +878,7 @@ const TeamBuilder = ({
           onChangePlayerRank={onChangePlayerRank}
           onTogglePlayerRole={onTogglePlayerRole}
           onRemoveTeam={onRemoveTeam}
+          onChangeTeamName={onChangeTeamName}
         />
       </div>
     )

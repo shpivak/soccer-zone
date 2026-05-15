@@ -1,0 +1,16 @@
+Generate a vibrant, celebratory sports illustration for the winning team of the week in a soccer league.
+
+Context:
+- League: {{leagueName}}
+- Winning team: {{teamName}}
+- Team color: {{teamColor}}
+- Date: {{date}}
+- Season: {{seasonLabel}}
+
+Style:
+- Dramatic lighting, confetti, and celebratory atmosphere
+- Team name prominently displayed with their color theme
+- Soccer ball and trophy imagery
+- "Soccer Zone" watermark in the corner
+- Modern, social-media-ready format (1080x1080 or 16:9)
+- Bold typography with the team name and "🏆 Winners of the Week"

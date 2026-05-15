@@ -1,6 +1,7 @@
 import { LEAGUE_TYPES, getTeamDisplayName } from './leagueUtils'
 
 export const getGameWinner = (game) => {
+  if (game.played === false) return null
   if (game.score.a > game.score.b) return game.teamA
   if (game.score.b > game.score.a) return game.teamB
   return null
@@ -20,6 +21,7 @@ const createStandingsRow = (team) => ({
 })
 
 const applyGameToStandings = (standingsMap, game, pointsConfig) => {
+  if (game.played === false) return
   const teamAStats = standingsMap.get(game.teamA)
   const teamBStats = standingsMap.get(game.teamB)
   if (!teamAStats || !teamBStats) return
@@ -115,6 +117,7 @@ export const calculatePlayerStats = (players, sessions, pointsConfig, leagueType
     })
 
     session.games.forEach((game) => {
+      if (game.played === false) return
       const teamA = teamGamesSummary.get(game.teamA)
       const teamB = teamGamesSummary.get(game.teamB)
       if (!teamA || !teamB) return
@@ -159,19 +162,29 @@ export const calculatePlayerStats = (players, sessions, pointsConfig, leagueType
   })
 
   return [...statsMap.values()]
-    .map((player) => ({
-      ...player,
-      tournamentsParticipated: player.sessionsParticipated,
-      tournamentsWon: player.sessionsWon,
-      defenderRatio:
-        player.gamesPlayed === 0 ? 0 : Number((player.goalsConceded / player.gamesPlayed).toFixed(2)),
-    }))
+    .map((player) => {
+      const isMid = player.isOffense && player.isDefense
+      const isDefender = !player.isOffense && player.isDefense
+      const goalWeight = isDefender ? 1.5 : isMid ? 1.25 : 1
+      const assistWeight = isDefender ? 1.5 : 1
+      const defenderRatio =
+        player.gamesPlayed === 0 ? 0 : Number((player.goalsConceded / player.gamesPlayed).toFixed(2))
+      return {
+        ...player,
+        tournamentsParticipated: player.sessionsParticipated,
+        tournamentsWon: player.sessionsWon,
+        defenderRatio,
+        weightedGoals: Number((player.goals * goalWeight).toFixed(2)),
+        weightedAssists: Number((player.assists * assistWeight).toFixed(2)),
+        effectiveDefenderRatio: isMid ? Number((defenderRatio / 1.25).toFixed(2)) : defenderRatio,
+      }
+    })
     .sort(
       (a, b) =>
         b.sessionsWon - a.sessionsWon ||
         b.totalGamesWon - a.totalGamesWon ||
-        b.goals - a.goals ||
-        b.assists - a.assists ||
+        b.weightedGoals - a.weightedGoals ||
+        b.weightedAssists - a.weightedAssists ||
         a.name.localeCompare(b.name),
     )
 }
@@ -188,7 +201,7 @@ export const getLeaders = (playerStats) => {
   const sortedAssisters = [...playerStats].sort((a, b) => b.assists - a.assists || b.goals - a.goals)
   const sortedDefenders = [...playerStats]
     .filter((item) => item.gamesPlayed > 0 && item.isDefense)
-    .sort((a, b) => a.defenderRatio - b.defenderRatio || b.gamesPlayed - a.gamesPlayed)
+    .sort((a, b) => a.effectiveDefenderRatio - b.effectiveDefenderRatio || b.gamesPlayed - a.gamesPlayed)
 
   return {
     mvp,

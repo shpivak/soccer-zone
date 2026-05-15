@@ -50,14 +50,27 @@ const setTeamPlayer = async (page, teamId, playerName, assigned = true) => {
 }
 
 const enableAdminMode = async (page) => {
-  await page.getByTestId('nav-admin').click()
-  await page.getByTestId('admin-password-input').fill(process.env.VITE_ADMIN_PASSWORD)
-  await page.getByTestId('admin-unlock-button').click()
-  // Unlocking admin mode can surface the "What's New" modal (z-50 overlay) which blocks clicks.
-  // Dismiss it if present, so navigation is stable.
-  const whatsNewDismiss = page.getByRole('button', { name: /יאללה נשחק/i })
-  await whatsNewDismiss.click({ timeout: 2000 }).catch(() => {})
+  // Admin mode is now derived from coach login (beforeEach sets __admin__).
+  // Just make sure we're on the live tab so subsequent nav clicks are predictable.
   await page.getByTestId('nav-live').click()
+}
+
+// Parse coach credentials from VITE_COACHES env var (same format as the app)
+const getCoachPassword = (coachId) => {
+  const raw = process.env.VITE_COACHES ?? ''
+  const entries = raw.split(';').filter(Boolean).map((p) => {
+    const [id, , password] = p.trim().split(':')
+    return { id: id.toLowerCase().trim(), password: password.trim() }
+  })
+  if (coachId === '__admin__') return process.env.VITE_ADMIN_PASSWORD ?? ''
+  return entries.find((e) => e.id === coachId)?.password ?? ''
+}
+
+// Fill the coach login screen (dropdown + password) and submit
+const loginAsCoach = async (page, coachId) => {
+  await page.getByTestId('coach-login-select').selectOption(coachId)
+  await page.getByTestId('coach-login-password').fill(getCoachPassword(coachId))
+  await page.getByTestId('coach-login-submit').click()
 }
 
 const setScore = async (page, side, score) => {
@@ -87,6 +100,8 @@ test.beforeEach(async ({ page }) => {
     }
     // Dismiss the "What's New" popup so it doesn't block test interactions
     localStorage.setItem('soccer-zone-whats-new-seen', appVersion)
+    // Bypass coach selection screen — tests run as "all leagues" identity
+    localStorage.setItem('soccer-zone-coach-id', '__admin__')
   }, packageJson.version)
   await page.goto('/')
   // Dismiss What's New modal if it shows (guards against dev-server version cache mismatch)
@@ -131,19 +146,9 @@ test('main navigation, dropdown labels, and tournament stats render for the sele
 })
 
 test('management controls are separated and empty tournament leagues can still start from scratch', async ({ page }) => {
-  // Admin panel is on the admin tab
+  // Admin panel is on the admin tab — always accessible when logged in
   await page.getByTestId('nav-admin').click()
   await expect(page.getByTestId('management-panel')).toBeVisible()
-  // Admin is off by default — only password prompt visible
-  await expect(page.getByTestId('admin-password-input')).toBeVisible()
-  await expect(page.getByTestId('add-league-name')).toHaveCount(0)
-  await expect(page.getByTestId('clear-league-data')).toHaveCount(0)
-
-  await enableAdminMode(page)  // navigates to admin, unlocks, returns to live
-
-  // Re-check admin panel controls on admin tab
-  await page.getByTestId('nav-admin').click()
-  await expect(page.getByTestId('admin-password-input')).toHaveCount(0)
   await expect(page.getByTestId('add-league-name')).toBeVisible()
   await expect(page.getByTestId('clear-league-data')).toBeEnabled()
   await expect(page.getByTestId('reset-league-to-mock')).toBeEnabled()
@@ -437,8 +442,8 @@ test('regular league stats show a league table and summary leaders without the f
   await page.getByTestId('nav-stats').click()
   await expect(page.getByRole('heading', { name: 'טבלת ליגה וראשי קטגוריות - ליגת סוקרזון 5' })).toBeVisible()
   await expect(page.getByTestId('live-standings-table')).toBeVisible()
-  await expect(page.getByRole('cell', { name: 'נשרים' })).toBeVisible()
-  await expect(page.getByRole('cell', { name: 'זאבים' })).toBeVisible()
+  await expect(page.getByTestId('live-standings-table').getByRole('cell', { name: 'נשרים' })).toBeVisible()
+  await expect(page.getByTestId('live-standings-table').getByRole('cell', { name: 'זאבים' })).toBeVisible()
   await expect(page.locator('[data-testid^="player-stats-row-"]')).toHaveCount(0)
   await expect(page.getByTestId('player-stats-summary')).toContainText('דירוג שערים')
 })
@@ -682,44 +687,16 @@ test('bug-4: צור מחזור creates a new round on first click for regular le
   await expect(page.locator('[data-testid="tournament-select"] option')).toHaveCount(countBefore + 1)
 })
 
-test('admin mode requires password, hides controls when locked, and persists in session storage', async ({ page }) => {
-  // Admin panel lives on the admin tab
+test('admin panel is accessible when logged in and controls are visible', async ({ page }) => {
   await page.getByTestId('nav-admin').click()
-
-  // Admin is off by default — only password prompt is visible
-  await expect(page.getByTestId('admin-password-input')).toBeVisible()
-  await expect(page.getByTestId('admin-unlock-button')).toBeVisible()
-  await expect(page.getByTestId('clear-league-data')).toHaveCount(0)
-  await expect(page.getByTestId('add-league-name')).toHaveCount(0)
-
-  // Wrong password shows error and stays locked
-  await page.getByTestId('admin-password-input').fill('wrongpassword')
-  await page.getByTestId('admin-unlock-button').click()
-  await expect(page.getByTestId('admin-password-error')).toBeVisible()
-  await expect(page.getByTestId('admin-password-input')).toBeVisible()
-  await expect(page.getByTestId('clear-league-data')).toHaveCount(0)
-
-  // Correct password unlocks (enableAdminMode navigates to admin, unlocks, returns to live)
-  await enableAdminMode(page)
-
-  // Check admin controls on admin tab
-  await page.getByTestId('nav-admin').click()
-  await expect(page.getByTestId('admin-password-input')).toHaveCount(0)
-  await expect(page.getByTestId('admin-lock-button')).toBeVisible()
+  await expect(page.getByTestId('management-panel')).toBeVisible()
   await expect(page.getByTestId('clear-league-data')).toBeVisible()
   await expect(page.getByTestId('add-league-name')).toBeVisible()
 
-  // After reload, admin mode is still active (session storage)
+  // Admin controls persist across reload (coach session in localStorage)
   await page.reload()
   await page.getByTestId('nav-admin').click()
-  await expect(page.getByTestId('admin-password-input')).toHaveCount(0)
   await expect(page.getByTestId('clear-league-data')).toBeVisible()
-
-  // Lock button returns to locked state and hides controls
-  await page.getByTestId('admin-lock-button').click()
-  await expect(page.getByTestId('admin-password-input')).toBeVisible()
-  await expect(page.getByTestId('clear-league-data')).toHaveCount(0)
-  await expect(page.getByTestId('add-league-name')).toHaveCount(0)
 })
 
 test('share copy button copies the correct day message to clipboard', async ({ page, context }) => {
@@ -857,10 +834,7 @@ test('admin notification panel: templates render and message fills textarea', as
   await page.reload()
   await page.getByRole('button', { name: /יאללה נשחק/ }).click({ timeout: 2000 }).catch(() => {})
 
-  // Unlock admin and stay on admin panel
   await page.getByTestId('nav-admin').click()
-  await page.getByTestId('admin-password-input').fill(process.env.VITE_ADMIN_PASSWORD)
-  await page.getByTestId('admin-unlock-button').click()
 
   // All template buttons visible
   await expect(page.getByTestId('notif-template-morning')).toBeVisible()
@@ -902,18 +876,8 @@ test('delete league removes it from the league dropdown', async ({ page }) => {
 
 // ─── PR #10: rank, clean-teams, auto-generate ─────────────────────────────────
 
-test('player rank dropdown is hidden from non-admin and shows A/B/C options for admin', async ({ page }) => {
-  // Without admin — rank select should not be visible on bench players
-  await page.getByTestId('league-select').selectOption('tournament-1')
-  await page.getByTestId('tournament-select').selectOption('2026-03-01')
-
-  const anyChip = page.locator('[data-testid^="player-chip-"]').first()
-  await expect(anyChip).toBeVisible()
-  const chipId = (await anyChip.getAttribute('data-testid')).replace('player-chip-', '')
-  await expect(page.getByTestId(`player-rank-${chipId}`)).toHaveCount(0)
-
-  // With admin — rank select appears with correct default and accepts all ranks
-  await enableAdminMode(page)
+test('player rank dropdown shows A/B/C options and persists changes', async ({ page }) => {
+  // Rank select is always visible for logged-in users
   await page.getByTestId('league-select').selectOption('tournament-2')
   await page.getByTestId('create-tournament-empty').click()
   await addPlayer(page, 'שחקן דירוג')
@@ -982,7 +946,7 @@ test('auto-generate distributes bench players across teams', async ({ page }) =>
 
 // ─── PR #10: role buttons admin-only ──────────────────────────────────────────
 
-test('offense and defense role buttons are hidden from non-admin', async ({ page }) => {
+test('offense and defense role buttons are visible for logged-in users', async ({ page }) => {
   await page.getByTestId('league-select').selectOption('tournament-1')
   await page.getByTestId('tournament-select').selectOption('2026-03-01')
 
@@ -990,8 +954,8 @@ test('offense and defense role buttons are hidden from non-admin', async ({ page
   await expect(anyChip).toBeVisible()
   const chipId = (await anyChip.getAttribute('data-testid')).replace('player-chip-', '')
 
-  await expect(page.getByTestId(`player-offense-${chipId}`)).toHaveCount(0)
-  await expect(page.getByTestId(`player-defense-${chipId}`)).toHaveCount(0)
+  await expect(page.getByTestId(`player-offense-${chipId}`)).toBeVisible()
+  await expect(page.getByTestId(`player-defense-${chipId}`)).toBeVisible()
 })
 
 // ─── PR #11: friendly 2 teams, add/remove, max 11 ────────────────────────────
@@ -1407,4 +1371,370 @@ test('adding a team shows color picker form; regular league shows name input too
     if (val === 'blue') { foundBlue = true; break }
   }
   expect(foundBlue).toBeTruthy()
+})
+
+// ─── Generate Image Modal ──────────────────────────────────────────────────
+
+const MOCK_GEMINI_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+
+const navigateToStatsAndOpenModal = async (page) => {
+  await page.getByTestId('league-select').selectOption('tournament-3')
+  await page.getByTestId('nav-stats').click()
+  await page.getByTestId('generate-image-btn-stats').click()
+  await expect(page.getByTestId('generate-image-modal')).toBeVisible()
+}
+
+const mockGeminiSuccess = (page) =>
+  page.route('**/generativelanguage.googleapis.com/**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: MOCK_GEMINI_PNG } }] } }],
+      }),
+    }),
+  )
+
+const mockGeminiError = (page, message = 'API_KEY_INVALID') =>
+  page.route('**/generativelanguage.googleapis.com/**', (route) =>
+    route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { message } }),
+    }),
+  )
+
+// Image generation tests are gated by RUN_IMAGE_TESTS=true.
+// Set in .env.local for local runs; CI sets it only on push to main (not PRs).
+test.describe('Generate Image Modal', () => {
+  test.beforeEach(() => {
+    test.skip(!process.env.RUN_IMAGE_TESTS, 'Image generation — run locally or on main push only (set RUN_IMAGE_TESTS=true)')
+  })
+
+  test('stats page — option selection, loading, result, back, close', async ({ page }) => {
+    await mockGeminiSuccess(page)
+    await navigateToStatsAndOpenModal(page)
+
+    // Stats page shows stats-table as 3rd option (not day-results)
+    await expect(page.getByTestId('generate-option-stats-table')).toBeVisible()
+
+    // Generate button disabled until an option is selected
+    await expect(page.getByTestId('generate-submit')).toBeDisabled()
+    await page.getByTestId('generate-option-mvp').click()
+    await expect(page.getByTestId('generate-submit')).toBeEnabled()
+
+    // Generate — spinner then result image
+    await page.getByTestId('generate-submit').click()
+    await expect(page.getByTestId('generate-loading')).toBeVisible()
+    await expect(page.getByTestId('generate-result-image')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByTestId('generate-download')).toBeVisible()
+
+    // Back returns to option picker
+    await page.getByTestId('generate-back').click()
+    await expect(page.getByTestId('generate-option-mvp')).toBeVisible()
+
+    // Close dismisses modal
+    await page.getByTestId('generate-image-close').click()
+    await expect(page.getByTestId('generate-image-modal')).toHaveCount(0)
+  })
+
+  test('live mode — shows day-results option, generates image', async ({ page }) => {
+    await mockGeminiSuccess(page)
+
+    // Navigate to a tournament with games so the generate button appears
+    await page.getByTestId('league-select').selectOption('tournament-3')
+    // generate button only appears once there are games
+    await page.getByTestId('generate-image-btn-live').click()
+    await expect(page.getByTestId('generate-image-modal')).toBeVisible()
+
+    // Live mode shows "תוצאות היום" as 3rd option, not "טבלת סטטיסטיקות"
+    await expect(page.getByTestId('generate-option-day-results')).toBeVisible()
+    await expect(page.getByTestId('generate-option-stats-table')).toHaveCount(0)
+
+    // Generate the day-results image
+    await page.getByTestId('generate-option-day-results').click()
+    await page.getByTestId('generate-submit').click()
+    await expect(page.getByTestId('generate-result-image')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('shows error message when Gemini API fails', async ({ page }) => {
+    await mockGeminiError(page)
+    await navigateToStatsAndOpenModal(page)
+    await page.getByTestId('generate-option-stats-table').click()
+    await page.getByTestId('generate-submit').click()
+
+    await expect(page.getByTestId('generate-error')).toBeVisible()
+    await expect(page.getByTestId('generate-error')).toContainText('API_KEY_INVALID')
+    // Can retry after error — option picker still visible
+    await expect(page.getByTestId('generate-option-stats-table')).toBeVisible()
+  })
+
+  test('real Gemini API call: image or graceful error shown', async ({ page }) => {
+    // No route mocking — uses VITE_GEMINI_API_KEY from .env.local.
+    // Passes if Gemini returns an image OR if quota/billing blocks it and an error message is shown.
+    await navigateToStatsAndOpenModal(page)
+    await page.getByTestId('generate-option-mvp').click()
+    await page.getByTestId('generate-submit').click()
+
+    await expect(page.getByTestId('generate-loading')).toBeVisible()
+
+    // Wait for either a generated image or an error message (e.g. quota exceeded)
+    await expect(
+      page.locator('[data-testid="generate-result-image"], [data-testid="generate-error"]')
+    ).toBeVisible({ timeout: 30000 })
+
+    const hasImage = await page.getByTestId('generate-result-image').isVisible()
+    if (hasImage) {
+      const src = await page.getByTestId('generate-result-image').getAttribute('src')
+      expect(src).toMatch(/^data:image\//)
+    } else {
+      // Quota / API error — verify a human-readable message is shown
+      await expect(page.getByTestId('generate-error')).toBeVisible()
+    }
+  })
+
+  test('edit prompt drawer shows and lets user change the prompt', async ({ page }) => {
+    await mockGeminiSuccess(page)
+    await navigateToStatsAndOpenModal(page)
+
+    // Edit prompt toggle not visible until an option is selected
+    await expect(page.getByTestId('edit-prompt-toggle')).toHaveCount(0)
+
+    await page.getByTestId('generate-option-mvp').click()
+
+    // Toggle appears after selection
+    await expect(page.getByTestId('edit-prompt-toggle')).toBeVisible()
+    await expect(page.getByTestId('edit-prompt-textarea')).toHaveCount(0)
+
+    // Open the drawer
+    await page.getByTestId('edit-prompt-toggle').click()
+    await expect(page.getByTestId('edit-prompt-textarea')).toBeVisible()
+
+    // Textarea pre-populated with a Hebrew prompt
+    const initialPrompt = await page.getByTestId('edit-prompt-textarea').inputValue()
+    expect(initialPrompt.length).toBeGreaterThan(10)
+
+    // Edit the prompt
+    await page.getByTestId('edit-prompt-textarea').fill('צור תמונה פשוטה של כדורגל')
+
+    // Generate uses the edited prompt (Gemini mock confirms the call was made)
+    await page.getByTestId('generate-submit').click()
+    await expect(page.getByTestId('generate-result-image')).toBeVisible({ timeout: 5000 })
+
+    // Close drawer — toggle closes it
+    await page.getByTestId('generate-back').click()
+    await page.getByTestId('generate-option-mvp').click()
+    await page.getByTestId('edit-prompt-toggle').click()
+    await page.getByTestId('edit-prompt-toggle').click()
+    await expect(page.getByTestId('edit-prompt-textarea')).toHaveCount(0)
+  })
+
+  test('squads mode: no option picker, auto-selects squads, edit prompt works', async ({ page }) => {
+    await mockGeminiSuccess(page)
+
+    // Open squads modal from the tournament team builder section
+    await page.getByTestId('league-select').selectOption('tournament-3')
+    await page.getByTestId('generate-image-btn-squads').click()
+    await expect(page.getByTestId('generate-image-modal')).toBeVisible()
+
+    // No option picker in squads mode
+    await expect(page.getByTestId('generate-option-winning-team')).toHaveCount(0)
+    await expect(page.getByTestId('generate-option-mvp')).toHaveCount(0)
+
+    // Edit prompt toggle immediately visible (squads auto-selected)
+    await expect(page.getByTestId('edit-prompt-toggle')).toBeVisible()
+
+    // Open drawer and verify prompt contains team/squad content
+    await page.getByTestId('edit-prompt-toggle').click()
+    const prompt = await page.getByTestId('edit-prompt-textarea').inputValue()
+    expect(prompt).toContain('סגלי הקבוצות')
+
+    // Generate works directly
+    await page.getByTestId('generate-submit').click()
+    await expect(page.getByTestId('generate-result-image')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('squads button available in friendly and regular team sections', async ({ page }) => {
+    // Friendly league
+    await page.getByTestId('league-select').selectOption('friendly-1')
+    await expect(page.getByTestId('generate-image-btn-squads')).toBeVisible()
+
+    // Regular league
+    await page.getByTestId('league-select').selectOption('regular-1')
+    await expect(page.getByTestId('generate-image-btn-squads')).toBeVisible()
+  })
+})
+
+// ─── Coach selection ───────────────────────────────────────────────────────────
+
+test('fresh load defaults to all-leagues view; coach badge opens login screen, login sets filtered view', async ({ page }) => {
+  // Fresh load (no coach in storage) defaults to all-leagues — no login screen
+  await page.addInitScript(() => {
+    localStorage.removeItem('soccer-zone-coach-id')
+  })
+  await page.goto('/')
+  await page.getByRole('button', { name: /יאללה נשחק/ }).click({ timeout: 2000 }).catch(() => {})
+
+  // App loads directly — no login screen, badge shows "כולם"
+  await expect(page.getByTestId('coach-select-screen')).toHaveCount(0)
+  await expect(page.getByTestId('coach-badge')).toBeVisible()
+  await expect(page.getByTestId('coach-badge')).toContainText('מאמן אחר')
+
+  // Click badge to switch to a named coach
+  await page.getByTestId('coach-badge').click()
+  await expect(page.getByTestId('coach-select-screen')).toBeVisible()
+  await expect(page.getByTestId('coach-login-select')).toBeVisible()
+  await expect(page.getByTestId('coach-login-password')).toBeVisible()
+
+  // Log in as zach
+  await loginAsCoach(page, 'zach')
+
+  // Login screen gone, badge now shows coach name
+  await expect(page.getByTestId('coach-select-screen')).toHaveCount(0)
+  await expect(page.getByTestId('coach-badge')).toContainText('צח')
+})
+
+test('coach badge switch button returns to selection screen', async ({ page }) => {
+  await expect(page.getByTestId('coach-badge')).toBeVisible()
+  await page.getByTestId('coach-badge').click()
+  await expect(page.getByTestId('coach-select-screen')).toBeVisible()
+})
+
+test('coach filter: leagues without coachId are visible to all; leagues with coachId only to that coach', async ({ page }) => {
+  await enableAdminMode(page)
+
+  // Navigate to admin panel, select regular-1, capture its display name, then assign to zach
+  await page.getByTestId('nav-admin').click()
+  await page.getByTestId('league-select').selectOption('regular-1')
+  const leagueName = await page.getByTestId('league-name-input').inputValue()
+  await page.getByTestId('league-coach-select').selectOption('zach')
+  await page.getByTestId('nav-live').click()
+
+  // Switch to rotem — the zach-assigned league should NOT appear in dropdown
+  await page.getByTestId('coach-badge').click()
+  await loginAsCoach(page, 'rotem')
+  const optionsRotem = await page.getByTestId('league-select').locator('option').allTextContents()
+  expect(optionsRotem.some((o) => o.includes(leagueName))).toBeFalsy()
+
+  // Switch to zach — the assigned league SHOULD appear
+  await page.getByTestId('coach-badge').click()
+  await loginAsCoach(page, 'zach')
+  const optionsZach = await page.getByTestId('league-select').locator('option').allTextContents()
+  expect(optionsZach.some((o) => o.includes(leagueName))).toBeTruthy()
+})
+
+test('coach assignment persists after page reload', async ({ page }) => {
+  await enableAdminMode(page)
+
+  // Assign regular-1 to zach via admin panel
+  await page.getByTestId('nav-admin').click()
+  await page.getByTestId('league-select').selectOption('regular-1')
+  await page.getByTestId('league-coach-select').selectOption('zach')
+
+  // Wait for save to propagate (debounced 300ms + network round-trip)
+  await page.waitForTimeout(2000)
+
+  // Reload the page — coach assignment must survive
+  await page.reload()
+  await page.getByRole('button', { name: /יאללה נשחק/ }).click({ timeout: 2000 }).catch(() => {})
+  await page.getByTestId('nav-admin').click()
+  await page.getByTestId('league-select').selectOption('regular-1')
+
+  // The select should still show 'zach' after reload
+  await expect(page.getByTestId('league-coach-select')).toHaveValue('zach')
+})
+
+// ─── Auto-schedule ─────────────────────────────────────────────────────────────
+// regular-1 has 4 teams → (4-1)=3 game days per round, so 1 round = 3 stubs
+
+test('schedule button appears in live mode for regular league with teams; confirm creates (numTeams-1)*rounds stubs', async ({ page }) => {
+  await enableAdminMode(page)
+  // Select the regular league that already has teams in test data
+  await page.getByTestId('league-select').selectOption('regular-1')
+
+  // Schedule 📅 button is visible next to create-tournament
+  await expect(page.getByTestId('open-schedule-drawer')).toBeVisible()
+  const beforeOptions = await page.getByTestId('tournament-select').locator('option').allTextContents()
+
+  await page.getByTestId('open-schedule-drawer').click()
+  await expect(page.getByTestId('schedule-drawer')).toBeVisible()
+
+  // Default rounds=1, 4 teams → 3 stubs displayed
+  await expect(page.getByTestId('schedule-confirm')).toContainText('3')
+
+  // Set 2 rounds + final → 3*2+1 = 7 stubs
+  await page.getByTestId('schedule-rounds').fill('2')
+  await page.getByTestId('schedule-final').check()
+  await expect(page.getByTestId('schedule-confirm')).toContainText('7')
+
+  await page.getByTestId('schedule-confirm').click()
+  await expect(page.getByTestId('schedule-drawer')).toHaveCount(0)
+
+  // 7 new stubs added on top of existing game days
+  const afterOptions = await page.getByTestId('tournament-select').locator('option').allTextContents()
+  expect(afterOptions.length).toBe(beforeOptions.length + 7)
+  expect(afterOptions[afterOptions.length - 1]).toContain('גמר')
+})
+
+test('schedule drawer skip button dismisses drawer without creating stubs', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('regular-1')
+  await page.getByTestId('open-schedule-drawer').click()
+
+  await expect(page.getByTestId('schedule-drawer')).toBeVisible()
+  const beforeOptions = await page.getByTestId('tournament-select').locator('option').allTextContents()
+  await page.getByTestId('schedule-skip').click()
+
+  await expect(page.getByTestId('schedule-drawer')).toHaveCount(0)
+  const afterOptions = await page.getByTestId('tournament-select').locator('option').allTextContents()
+  expect(afterOptions.length).toBe(beforeOptions.length)
+})
+
+// ─── Coach toggle ──────────────────────────────────────────────────────────────
+
+test('toggling between Zach and Admin: each sees only their expected leagues', async ({ page }) => {
+  await enableAdminMode(page)
+
+  // As Admin: assign regular-1 to Zach, assign another league to Rotem
+  await page.getByTestId('nav-admin').click()
+  await page.getByTestId('league-select').selectOption('regular-1')
+  const zachLeagueName = await page.getByTestId('league-name-input').inputValue()
+  await page.getByTestId('league-coach-select').selectOption('zach')
+
+  // Create a second league assigned to Rotem
+  await page.getByTestId('add-league-name').fill('ליגת רותם')
+  await page.getByTestId('add-league-type').selectOption('tournament')
+  await page.getByTestId('add-league-save').click()
+  await page.getByTestId('league-coach-select').selectOption('rotem')
+
+  // Switch to Zach
+  await page.getByTestId('coach-badge').click()
+  await loginAsCoach(page, 'zach')
+
+  // Zach sees only their assigned league
+  const zachOptions = await page.getByTestId('league-select').locator('option').allTextContents()
+  expect(zachOptions.some((o) => o.includes(zachLeagueName))).toBeTruthy()
+  expect(zachOptions.some((o) => o.includes('ליגת רותם'))).toBeFalsy()
+
+  // Switch back to Admin
+  await page.getByTestId('coach-badge').click()
+  await loginAsCoach(page, '__admin__')
+
+  // Admin sees all leagues (including both)
+  const adminOptions = await page.getByTestId('league-select').locator('option').allTextContents()
+  expect(adminOptions.some((o) => o.includes(zachLeagueName))).toBeTruthy()
+  expect(adminOptions.some((o) => o.includes('ליגת רותם'))).toBeTruthy()
+
+  // Admin renames Zach's league
+  await page.getByTestId('nav-admin').click()
+  await page.getByTestId('league-select').selectOption('regular-1')
+  const renamedName = zachLeagueName + ' (שונה)'
+  await page.getByTestId('league-name-input').fill(renamedName)
+  await page.getByTestId('nav-live').click()
+
+  // Switch back to Zach — sees the renamed league
+  await page.getByTestId('coach-badge').click()
+  await loginAsCoach(page, 'zach')
+  const zachOptionsAfter = await page.getByTestId('league-select').locator('option').allTextContents()
+  expect(zachOptionsAfter.some((o) => o.includes(renamedName))).toBeTruthy()
 })

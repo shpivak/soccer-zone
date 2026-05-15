@@ -55,12 +55,15 @@ export const AppProvider = ({ children }) => {
     try {
       const data = await loadDatasetData(dataset)
       const isStaleRequest = requestId !== loadRequestIdRef.current
+      if (isStaleRequest) return
+      // Always mark as loaded so saves aren't blocked — even if the user made
+      // changes while loading (in which case we keep their in-memory version)
+      loadedDatasetRef.current = dataset
       const dataChangedSinceLoadStarted = revisionAtStart !== dataRevisionRef.current
-      if (isStaleRequest || dataChangedSinceLoadStarted) return
+      if (dataChangedSinceLoadStarted) return
       setLeagues(data.leagues)
       setPlayers(data.players)
       setTournaments(data.tournaments)
-      loadedDatasetRef.current = dataset
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load data')
     } finally {
@@ -154,11 +157,11 @@ export const AppProvider = ({ children }) => {
       clearTimeout(pendingTimerRef.current)
       pendingTimerRef.current = null
       if (loadedDatasetRef.current !== DEFAULT_DATASET) return
-      // Fire-and-forget — fetch uses keepalive:true so the browser completes
-      // the requests even after the page closes
-      saveLeagues(DEFAULT_DATASET, leaguesRef.current).catch(() => {})
-      savePlayers(DEFAULT_DATASET, playersRef.current).catch(() => {})
-      saveTournaments(DEFAULT_DATASET, tournamentsRef.current).catch(() => {})
+      // keepalive:true lets the browser complete requests even after the page closes
+      const opts = { keepalive: true }
+      saveLeagues(DEFAULT_DATASET, leaguesRef.current, opts).catch(() => {})
+      savePlayers(DEFAULT_DATASET, playersRef.current, opts).catch(() => {})
+      saveTournaments(DEFAULT_DATASET, tournamentsRef.current, opts).catch(() => {})
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
@@ -188,10 +191,10 @@ export const AppProvider = ({ children }) => {
       setPlayers: updatePlayers,
       setTournaments: updateTournaments,
       setActiveLeagueId: changeLeague,
-      createLeague: ({ name, type }) => {
+      createLeague: ({ name, type, id: providedId }) => {
         const trimmed = name?.trim() ?? ''
         const safeType = Object.values(LEAGUE_TYPES).includes(type) ? type : LEAGUE_TYPES.tournament
-        const id = `league-${Date.now()}`
+        const id = providedId ?? `league-${Date.now()}`
         const newLeague = {
           id,
           name: trimmed || APP_CONFIG.defaultLeagueName,

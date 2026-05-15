@@ -95,6 +95,7 @@ const migrateLeague = (league) => ({
   type: Object.values(LEAGUE_TYPES).includes(league.type) ? league.type : LEAGUE_TYPES.tournament,
   seasonLabel: league.seasonLabel?.trim() || '2026',
   allowRosterEdits: league.allowRosterEdits === true,
+  ...(league.coachId ? { coachId: league.coachId } : {}),
   teams: (league.teams ?? []).map((team, index) => ({
     ...team,
     id: team.id ?? `team${index + 1}`,
@@ -173,7 +174,8 @@ const normalizeLoadedData = (dataset, data) => ({
             a.id.localeCompare(b.id),
         )
       const baseTeamsSource = relatedTournaments.find((tournament) => (tournament.teams?.length ?? 0) > 0)?.teams ?? league.teams
-      const baseTeams = clone(baseTeamsSource ?? [])
+      // Strip sessionName so it doesn't bleed from fixture 1's teams into all other fixtures
+      const baseTeams = clone(baseTeamsSource ?? []).map(({ sessionName: _sessionName, ...team }) => team)
 
       league.teams = clone(baseTeams)
       for (const tournament of relatedTournaments) {
@@ -251,33 +253,33 @@ const assertProdWriteAllowed = (resolvedDataset) => {
   }
 }
 
-export const saveLeagues = async (dataset, leagues) => {
+export const saveLeagues = async (dataset, leagues, options = {}) => {
   const resolvedDataset = resolveDataset(dataset)
   if (isSupabaseConfigured()) {
     assertProdWriteAllowed(resolvedDataset)
-    await saveLeaguesToSupabase(resolvedDataset, leagues)
+    await saveLeaguesToSupabase(resolvedDataset, leagues, options)
     return
   }
 
   saveLeaguesToLocal(resolvedDataset, leagues)
 }
 
-export const savePlayers = async (dataset, players) => {
+export const savePlayers = async (dataset, players, options = {}) => {
   const resolvedDataset = resolveDataset(dataset)
   if (isSupabaseConfigured()) {
     assertProdWriteAllowed(resolvedDataset)
-    await savePlayersToSupabase(resolvedDataset, players)
+    await savePlayersToSupabase(resolvedDataset, players, options)
     return
   }
 
   savePlayersToLocal(resolvedDataset, players)
 }
 
-export const saveTournaments = async (dataset, tournaments) => {
+export const saveTournaments = async (dataset, tournaments, options = {}) => {
   const resolvedDataset = resolveDataset(dataset)
   if (isSupabaseConfigured()) {
     assertProdWriteAllowed(resolvedDataset)
-    await saveTournamentsToSupabase(resolvedDataset, tournaments)
+    await saveTournamentsToSupabase(resolvedDataset, tournaments, options)
     return
   }
 

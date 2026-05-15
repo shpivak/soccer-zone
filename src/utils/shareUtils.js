@@ -101,7 +101,7 @@ export const generateDayShareMessage = (
   players,
   leagueName,
   standings = [],
-  { includeResults = true, shareUrl = '' } = {},
+  { includeResults = true, shareUrl = '', mvp = null } = {},
 ) => {
   const date = tournament.date ?? ''
   const games = tournament.games ?? []
@@ -117,6 +117,7 @@ export const generateDayShareMessage = (
 
   if (includeResults) {
     const resultsLines = games
+      .filter((game) => game.played !== false)
       .map((game) => {
         const line = `${getTeamName(game.teamA)} ${game.score.a} – ${game.score.b} ${getTeamName(game.teamB)}`
         return game.description ? `${line}\n   📝 ${game.description}` : line
@@ -135,6 +136,7 @@ export const generateDayShareMessage = (
 
   if (scorerLines) msg += `\n\n🥅 כובשים:\n${scorerLines}`
   if (assisterLines) msg += `\n\n🎯 מבשלים:\n${assisterLines}`
+  if (mvp) msg += `\n\n🏆 MVP: *${mvp.name}*`
 
   return appendShareLink(msg, shareUrl)
 }

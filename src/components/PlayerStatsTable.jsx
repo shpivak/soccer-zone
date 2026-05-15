@@ -14,7 +14,29 @@ const withRanks = (rows, metricKey) => {
   })
 }
 
-const CompactMetricTable = ({ title, rows, metricLabel, metricKey }) => {
+const TEAM_EMOJI_MAP = {
+  'אריות': '🦁',
+  'דרקונים': '🐉',
+  'זאבים': '🐺',
+  'נשרים': '🦅',
+  'פנתרים': '🐆',
+  'קרנפים': '🦏',
+}
+
+const getTeamShortLabel = (team) => {
+  if (!team) return ''
+  const name = team.name?.trim() || ''
+  // Check hard-coded emoji map first (partial match against team name)
+  for (const [key, emoji] of Object.entries(TEAM_EMOJI_MAP)) {
+    if (name.includes(key)) return emoji
+  }
+  // Fall back to emoji found in the name itself
+  const emojiMatch = name.match(/\p{Emoji_Presentation}|\p{Emoji}\uFE0F/gu)
+  if (emojiMatch && emojiMatch.length > 0) return emojiMatch[0]
+  return name
+}
+
+const CompactMetricTable = ({ title, rows, metricLabel, metricKey, playerTeamMap = null }) => {
   const ranked = withRanks(rows, metricKey)
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm">
@@ -24,6 +46,7 @@ const CompactMetricTable = ({ title, rows, metricLabel, metricKey }) => {
           <tr>
             <th className="w-8 p-2"></th>
             <th className="p-2">שחקן</th>
+            {playerTeamMap && <th className="p-2">קבוצה</th>}
             <th className="p-2">{metricLabel}</th>
           </tr>
         </thead>
@@ -32,12 +55,15 @@ const CompactMetricTable = ({ title, rows, metricLabel, metricKey }) => {
             <tr key={`${title}-${row.playerId}`} data-testid={`compact-${metricKey}-row-${i}`} className="border-b">
               <td className="p-2 text-center text-base leading-none">{rankMedalInline(row.displayRank)}</td>
               <td className="p-2">{row.name}</td>
+              {playerTeamMap && (
+                <td className="p-2 text-center">{getTeamShortLabel(playerTeamMap.get(row.playerId))}</td>
+              )}
               <td className="p-2">{row[metricKey]}</td>
             </tr>
           ))}
           {ranked.length === 0 && (
             <tr>
-              <td colSpan={3} className="p-2 text-center text-gray-400">
+              <td colSpan={playerTeamMap ? 4 : 3} className="p-2 text-center text-gray-400">
                 אין נתונים
               </td>
             </tr>
@@ -48,12 +74,12 @@ const CompactMetricTable = ({ title, rows, metricLabel, metricKey }) => {
   )
 }
 
-const PlayerStatsTable = ({ stats, leaders, summaryOnly = false }) => {
+const PlayerStatsTable = ({ stats, leaders, summaryOnly = false, playerTeamMap = null }) => {
   const topScorers = [...stats].sort((a, b) => b.goals - a.goals || b.assists - a.assists).filter((row) => row.goals > 0)
   const topAssisters = [...stats].sort((a, b) => b.assists - a.assists || b.goals - a.goals).filter((row) => row.assists > 0)
   const bestDefenders = [...stats]
     .filter((row) => row.gamesPlayed > 0 && row.isDefense)
-    .sort((a, b) => a.defenderRatio - b.defenderRatio)
+    .sort((a, b) => a.effectiveDefenderRatio - b.effectiveDefenderRatio)
 
   return (
     <div className="space-y-4" data-testid="player-stats-summary">
@@ -69,6 +95,7 @@ const PlayerStatsTable = ({ stats, leaders, summaryOnly = false }) => {
               <thead className="bg-gray-100">
                 <tr>
                   <th className="p-2">שחקן</th>
+                  {playerTeamMap && <th className="p-2">קבוצה</th>}
                   <th className="p-2">השתתפות</th>
                   <th className="p-2">זכיות טורניר</th>
                   <th className="p-2">ניצחונות משחק</th>
@@ -83,6 +110,9 @@ const PlayerStatsTable = ({ stats, leaders, summaryOnly = false }) => {
                 {stats.map((row) => (
                   <tr key={row.playerId} data-testid={`player-stats-row-${row.playerId}`} className="border-b">
                     <td className="p-2">{row.name}</td>
+                    {playerTeamMap && (
+                      <td className="p-2 text-center">{getTeamShortLabel(playerTeamMap.get(row.playerId))}</td>
+                    )}
                     <td className="p-2">{row.tournamentsParticipated}</td>
                     <td className="p-2">{row.tournamentsWon}</td>
                     <td className="p-2">{row.totalGamesWon}</td>
@@ -101,13 +131,14 @@ const PlayerStatsTable = ({ stats, leaders, summaryOnly = false }) => {
 
       {/* Ranked tables 1-5 with medals — always shown */}
       <div className="grid gap-4 md:grid-cols-3">
-        <CompactMetricTable title="⚽ דירוג שערים" rows={topScorers} metricLabel="שערים" metricKey="goals" />
-        <CompactMetricTable title="🎯 דירוג בישולים" rows={topAssisters} metricLabel="בישולים" metricKey="assists" />
+        <CompactMetricTable title="⚽ דירוג שערים" rows={topScorers} metricLabel="שערים" metricKey="goals" playerTeamMap={playerTeamMap} />
+        <CompactMetricTable title="🎯 דירוג בישולים" rows={topAssisters} metricLabel="בישולים" metricKey="assists" playerTeamMap={playerTeamMap} />
         <CompactMetricTable
           title="🛡 דירוג הגנתי"
           rows={bestDefenders}
           metricLabel="יחס ספיגה למשחק"
           metricKey="defenderRatio"
+          playerTeamMap={playerTeamMap}
         />
       </div>
     </div>
