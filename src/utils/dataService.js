@@ -174,7 +174,8 @@ const normalizeLoadedData = (dataset, data) => ({
             a.id.localeCompare(b.id),
         )
       const baseTeamsSource = relatedTournaments.find((tournament) => (tournament.teams?.length ?? 0) > 0)?.teams ?? league.teams
-      const baseTeams = clone(baseTeamsSource ?? [])
+      // Strip sessionName so it doesn't bleed from fixture 1's teams into all other fixtures
+      const baseTeams = clone(baseTeamsSource ?? []).map(({ sessionName: _sessionName, ...team }) => team)
 
       league.teams = clone(baseTeams)
       for (const tournament of relatedTournaments) {
