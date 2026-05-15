@@ -1,93 +1,128 @@
 const lookupName = (id, players) => players.find((p) => p.id === id)?.name ?? ''
 
-// Appended to every prompt to ensure Hebrew renders correctly and no faces appear.
-const GLOBAL_STYLE_NOTES =
-  'CRITICAL: All text must be in Hebrew (right-to-left). ' +
-  'Render every Hebrew name and word with perfect letter shapes — do not invent or distort letters. ' +
-  'Do NOT draw human faces; use dramatic silhouettes or shadows of players instead. ' +
-  'Design style: dark background, green and gold accents, modern sports aesthetic, square format ready for social media.'
+// Prompts ask for a VISUAL BACKGROUND only — no text in the image.
+// The actual Hebrew data is overlaid by the app using HTML (browser renders it correctly).
 
-export const buildPrompt = (type, { stats = [], leaders = {}, standings = [], league = null, session = null, players = [] } = {}) => {
-  const leagueName = league?.name ?? 'Soccer Zone'
+const BASE_STYLE =
+  'Dark background. Green and gold accents. Modern sports aesthetic. ' +
+  'NO text, NO letters, NO numbers, NO labels anywhere in the image. ' +
+  'Square format (1:1 aspect ratio). High quality.'
 
+export const buildPrompt = (type, _data = {}) => {
   if (type === 'winning-team') {
-    const winner = standings[0]
-    const teamName = winner?.teamName ?? 'הקבוצה המנצחת'
     return (
-      `צור פוסטר חגיגי ודרמטי לקבוצת השבוע: "${teamName}" בליגת "${leagueName}". ` +
-      `הצג בבירור את הכיתוב "🏆 קבוצת השבוע" ואת שם הקבוצה "${teamName}" בצורה בולטת — ודא שהאותיות בעברית מדויקות. ` +
-      `קונפטי, ירוק כהה וזהב, טיפוגרפיה מודרנית ועוצמתית. ` +
-      `הוסף לוגו "Soccer Zone" בפינה. ` +
-      GLOBAL_STYLE_NOTES
+      'Create a dramatic celebratory soccer "Team of the Week" poster background. ' +
+      'Gold confetti raining down, dramatic light beams in green and gold, large trophy silhouette in center, ' +
+      'soccer ball elements, sparkles and stars. Festive and energetic mood. ' +
+      BASE_STYLE
     )
   }
 
   if (type === 'mvp') {
-    const mvp = leaders?.mvp
-    const name = mvp?.name ?? 'MVP'
-    const goals = mvp?.goals ?? 0
-    const assists = mvp?.assists ?? 0
-    const wins = mvp?.totalGamesWon ?? 0
     return (
-      `צור פוסטר MVP דרמטי ועוצמתי לשחקן "${name}" בליגת "${leagueName}". ` +
-      `הצג את השם "${name}" בגדול ומדויק — ודא שכל אות בעברית נכתבת נכון. ` +
-      `סטטיסטיקות כתגיות מעוצבות: ${goals} שערים ⚽, ${assists} בישולים 🎯, ${wins} ניצחונות. ` +
-      `הצג "⭐ MVP" בבולטות. תאורת ספוטלייט זהובה, כוכבים ואפקטי אור. ` +
-      `לוגו "Soccer Zone". ` +
-      GLOBAL_STYLE_NOTES
+      'Create a dramatic MVP spotlight soccer poster background. ' +
+      'Single player full-body silhouette (no face) in a golden spotlight, ' +
+      'dramatic rays of light, stars, soccer ball, glowing aura effect. Heroic and powerful mood. ' +
+      BASE_STYLE
     )
+  }
+
+  if (type === 'stats-table') {
+    return (
+      'Create a soccer season statistics infographic background layout. ' +
+      'Three distinct horizontal dark card/panel areas stacked vertically with subtle gold borders, ' +
+      'then a leaderboard table area at the bottom with row dividers. ' +
+      'Green and gold glow effects, subtle soccer field pattern. Clean and structured. ' +
+      BASE_STYLE
+    )
+  }
+
+  if (type === 'day-results') {
+    return (
+      'Create an energetic soccer match day results poster background. ' +
+      'Dynamic action lines, soccer ball motion blur, green and gold light streaks, ' +
+      'subtle stadium silhouette. Bold and exciting mood. ' +
+      BASE_STYLE
+    )
+  }
+
+  if (type === 'squads') {
+    return (
+      'Create a soccer team roster background with multiple distinct card zones side by side. ' +
+      'Each card zone has a subtle colored glow border in a different team color. ' +
+      'Soccer field texture in background, clean modern design. ' +
+      BASE_STYLE
+    )
+  }
+
+  return (
+    'Create a celebratory soccer background. Soccer ball, green and gold, modern sports design, confetti. ' +
+    BASE_STYLE
+  )
+}
+
+// Returns the structured data to overlay on top of the background image.
+export const buildOverlayData = (type, { stats = [], leaders = {}, standings = [], league = null, session = null, players = [] } = {}) => {
+  const leagueName = league?.name ?? 'Soccer Zone'
+
+  if (type === 'winning-team') {
+    const winner = standings[0]
+    return {
+      type: 'winning-team',
+      leagueName,
+      teamName: winner?.teamName ?? 'הקבוצה המנצחת',
+      points: winner?.points ?? 0,
+      wins: winner?.wins ?? 0,
+    }
+  }
+
+  if (type === 'mvp') {
+    const mvp = leaders?.mvp
+    return {
+      type: 'mvp',
+      leagueName,
+      name: mvp?.name ?? 'MVP',
+      goals: mvp?.goals ?? 0,
+      assists: mvp?.assists ?? 0,
+      wins: mvp?.totalGamesWon ?? 0,
+    }
   }
 
   if (type === 'stats-table') {
     const topScorer = [...stats].sort((a, b) => b.goals - a.goals)[0]
     const topAssister = [...stats].sort((a, b) => b.assists - a.assists)[0]
-    const mvpName = leaders?.mvp?.name ?? '-'
-    const top3 = standings.slice(0, 3).map((r, i) => `${i + 1}. ${r.teamName} (${r.points} נק')`).join(', ')
-    return (
-      `צור אינפוגרפיקה מעוצבת של סטטיסטיקות עונה לליגת "${leagueName}". ` +
-      `חלק 1 — מלך שערים 🥅: "${topScorer?.name ?? '-'}" עם ${topScorer?.goals ?? 0} שערים. ` +
-      `חלק 2 — מלך בישולים 🎯: "${topAssister?.name ?? '-'}" עם ${topAssister?.assists ?? 0} בישולים. ` +
-      `חלק 3 — MVP 🏆: "${mvpName}". ` +
-      (top3 ? `טבלת ניקוד: ${top3}. ` : '') +
-      `ודא שכל שם עברי מוצג עם אותיות מדויקות. מדליות 🥇🥈🥉 לדירוגים. ` +
-      `לוגו "Soccer Zone" בולט. ` +
-      GLOBAL_STYLE_NOTES
-    )
+    return {
+      type: 'stats-table',
+      leagueName,
+      topScorer: topScorer ? { name: topScorer.name, goals: topScorer.goals } : null,
+      topAssister: topAssister ? { name: topAssister.name, assists: topAssister.assists } : null,
+      mvpName: leaders?.mvp?.name ?? null,
+      top3: standings.slice(0, 3),
+    }
   }
 
   if (type === 'day-results') {
-    const date = session?.date ?? ''
-    const games = session?.games ?? []
-    const top3Standings = standings.slice(0, 3)
-      .map((r, i) => `${i + 1}. ${r.teamName} – ${r.points} נק'`).join(', ')
-    return (
-      `צור פוסטר תוצאות יום משחקים לליגת "${leagueName}"${date ? ` (${date})` : ''}. ` +
-      `נערכו ${games.length} משחקים היום. ` +
-      (top3Standings ? `טבלת מצב: ${top3Standings}. ` : '') +
-      `כותרת ראשית: "תוצאות היום" — ודא שהכיתוב בעברית ברור ומדויק. ` +
-      `עיצוב ספורטיבי דינמי ואנרגטי. לוגו "Soccer Zone". ` +
-      GLOBAL_STYLE_NOTES
-    )
+    return {
+      type: 'day-results',
+      leagueName,
+      date: session?.date ?? '',
+      gamesCount: (session?.games ?? []).filter((g) => g.played !== false).length,
+      top3: standings.slice(0, 3),
+    }
   }
 
   if (type === 'squads') {
     const teams = session?.teams ?? []
-    const teamLines = teams
-      .filter((t) => t.players?.length > 0)
-      .map((t) => {
-        const names = t.players.map((id) => lookupName(id, players)).filter(Boolean).join(', ')
-        return `${t.name}: ${names}`
-      })
-      .join('\n')
-    return (
-      `צור פוסטר ויזואלי מעוצב של סגלי הקבוצות לליגת "${leagueName}". ` +
-      `קבוצות ושחקנים:\n${teamLines || 'ללא שחקנים מוגדרים'}\n` +
-      `ודא שכל שם שחקן וקבוצה מוצג בעברית עם אותיות מדויקות ונכונות. ` +
-      `כרטיס נפרד לכל קבוצה עם שמה ושמות השחקנים, כל קבוצה עם גוון צבע משלה. ` +
-      `לוגו "Soccer Zone" בפינה. ` +
-      GLOBAL_STYLE_NOTES
-    )
+    return {
+      type: 'squads',
+      leagueName,
+      teams: teams.map((t) => ({
+        name: t.name,
+        color: t.color ?? 'gray',
+        players: (t.players ?? []).map((id) => lookupName(id, players)).filter(Boolean),
+      })),
+    }
   }
 
-  return `צור תמונה חגיגית לאפליקציית "Soccer Zone". נושא: כדורגל, ירוק וזהב, עיצוב מודרני. ${GLOBAL_STYLE_NOTES}`
+  return { type, leagueName }
 }
