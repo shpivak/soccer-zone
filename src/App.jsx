@@ -21,7 +21,7 @@ const parseCoachesFromEnv = () => {
     return { id: id.toLowerCase().trim(), name: name.trim(), password: password.trim() }
   })
 }
-export const COACHES = parseCoachesFromEnv()
+const COACHES = parseCoachesFromEnv()
 const COACH_ALL = '__admin__'
 
 // Round-robin schedule builder — returns array of matchweeks, each an array of { teamA, teamB }
@@ -273,7 +273,7 @@ function App() {
   const [pendingNumTeams, setPendingNumTeams] = useState(0)
   const didHydrateLeagueFromUrlRef = useRef(false)
   // Capture the ?league= URL param once at mount so URL-shared leagues stay visible
-  const urlLeagueIdRef = useRef(getLeagueIdFromUrl())
+  const [urlLeagueId] = useState(() => getLeagueIdFromUrl())
 
   // ── Coach selection ──────────────────────────────────────────────────────────
   const [activeCoachId, setActiveCoachId] = useState(() => getCoachIdFromUrl() ?? localStorage.getItem(COACH_SESSION_KEY) ?? COACH_ALL)
@@ -300,13 +300,12 @@ function App() {
   const visibleLeagues = useMemo(() => {
     if (!activeCoachId || activeCoachId === COACH_ALL) return leagues
     const coachLeagues = leagues.filter((l) => !l.coachId || l.coachId === activeCoachId)
-    const urlId = urlLeagueIdRef.current
-    if (urlId && !coachLeagues.some((l) => l.id === urlId)) {
-      const linked = leagues.find((l) => l.id === urlId)
+    if (urlLeagueId && !coachLeagues.some((l) => l.id === urlLeagueId)) {
+      const linked = leagues.find((l) => l.id === urlLeagueId)
       if (linked) return [...coachLeagues, linked]
     }
     return coachLeagues
-  }, [leagues, activeCoachId])
+  }, [leagues, activeCoachId, urlLeagueId])
 
   const activeCoachName = COACHES.find((c) => c.id === activeCoachId)?.name ?? null
 

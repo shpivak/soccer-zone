@@ -149,8 +149,6 @@ const withMatchesAttached = (tournaments, matchRows) => {
   }))
 }
 
-const isWriteMethod = (method) => method !== 'GET' && method !== 'HEAD'
-
 const buildIdInFilter = (ids) => `id=in.(${ids.map((id) => encodeURIComponent(id)).join(',')})`
 
 const listTableIds = async (dataset, tableName) => {

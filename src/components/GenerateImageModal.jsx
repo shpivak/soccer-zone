@@ -29,112 +29,131 @@ const PencilIcon = () => (
 
 // ── Overlay renderers ────────────────────────────────────────────────────────
 
+// Shared card row for stats-table: transparent left/right edges reveal AI silhouette + icon;
+// only the center 60% gets a dark background for legible text.
+const StatCard = ({ label, name, value, icon }) => (
+  <div className="flex h-full items-center">
+    {/* Left 22%: transparent — AI silhouette shows through */}
+    <div className="w-[22%]" />
+    {/* Center 56%: dark text zone */}
+    <div className="w-[56%] rounded-lg bg-black/75 px-3 py-2 text-right" dir="rtl">
+      <div className="text-[10px] text-gray-400">{label}</div>
+      <div className="text-base font-bold leading-tight text-white">{name}</div>
+      <div className="text-xl font-black text-yellow-400">{value} {icon}</div>
+    </div>
+    {/* Right 22%: transparent — AI icon shows through */}
+    <div className="w-[22%]" />
+  </div>
+)
+
 const OverlayWinningTeam = ({ data }) => (
-  <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-    <div className="text-5xl">🏆</div>
-    <div className="text-sm font-semibold uppercase tracking-widest text-yellow-300">קבוצת השבוע</div>
-    <div className="text-4xl font-black text-white drop-shadow-lg">{data.teamName}</div>
-    <div className="text-xs text-gray-300">{data.leagueName}</div>
-    <div className="mt-2 flex gap-6 text-center">
-      <div>
-        <div className="text-2xl font-bold text-yellow-400">{data.wins}</div>
-        <div className="text-xs text-gray-400">ניצחונות</div>
+  // Trophy is centered in the AI background — keep text at bottom 35%
+  <div className="flex h-full flex-col">
+    <div className="flex-1" /> {/* top 65%: transparent, let AI trophy show */}
+    <div className="mx-6 mb-6 rounded-xl bg-black/75 py-4 text-center">
+      <div className="text-[10px] font-semibold uppercase tracking-widest text-yellow-300">קבוצת השבוע</div>
+      <div className="text-3xl font-black text-white">{data.teamName}</div>
+      <div className="mt-1 flex justify-center gap-8">
+        <div>
+          <div className="text-xl font-bold text-yellow-400">{data.wins}</div>
+          <div className="text-[10px] text-gray-400">ניצחונות</div>
+        </div>
+        <div>
+          <div className="text-xl font-bold text-yellow-400">{data.points}</div>
+          <div className="text-[10px] text-gray-400">נקודות</div>
+        </div>
       </div>
-      <div>
-        <div className="text-2xl font-bold text-yellow-400">{data.points}</div>
-        <div className="text-xs text-gray-400">נקודות</div>
-      </div>
+      <div className="mt-1 text-[9px] text-gray-500">{data.leagueName}</div>
     </div>
   </div>
 )
 
 const OverlayMvp = ({ data }) => (
-  <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-    <div className="text-5xl">⭐</div>
-    <div className="text-sm font-semibold uppercase tracking-widest text-yellow-300">שחקן MVP</div>
-    <div className="text-4xl font-black text-white drop-shadow-lg">{data.name}</div>
-    <div className="text-xs text-gray-300">{data.leagueName}</div>
-    <div className="mt-2 flex gap-6 text-center">
-      <div>
-        <div className="text-2xl font-bold text-yellow-400">{data.goals}</div>
-        <div className="text-xs text-gray-400">שערים ⚽</div>
-      </div>
-      <div>
-        <div className="text-2xl font-bold text-yellow-400">{data.assists}</div>
-        <div className="text-xs text-gray-400">בישולים 🎯</div>
-      </div>
-      <div>
-        <div className="text-2xl font-bold text-yellow-400">{data.wins}</div>
-        <div className="text-xs text-gray-400">ניצחונות</div>
+  // AI has player silhouette centered, darker top/bottom bands
+  <div className="flex h-full flex-col justify-between px-6 py-5">
+    <div className="rounded-xl bg-black/75 py-3 text-center">
+      <div className="text-[10px] font-semibold uppercase tracking-widest text-yellow-300">⭐ שחקן MVP</div>
+      <div className="text-3xl font-black text-white">{data.name}</div>
+      <div className="text-[9px] text-gray-400">{data.leagueName}</div>
+    </div>
+    <div className="flex-1" /> {/* center: transparent — AI spotlight/silhouette */}
+    <div className="rounded-xl bg-black/75 py-3">
+      <div className="flex justify-center gap-8 text-center">
+        <div>
+          <div className="text-2xl font-black text-yellow-400">{data.goals}</div>
+          <div className="text-[10px] text-gray-400">שערים ⚽</div>
+        </div>
+        <div>
+          <div className="text-2xl font-black text-yellow-400">{data.assists}</div>
+          <div className="text-[10px] text-gray-400">בישולים 🎯</div>
+        </div>
+        <div>
+          <div className="text-2xl font-black text-yellow-400">{data.wins}</div>
+          <div className="text-[10px] text-gray-400">ניצחונות</div>
+        </div>
       </div>
     </div>
   </div>
 )
 
 const OverlayStatsTable = ({ data }) => (
-  <div className="flex h-full flex-col justify-between p-5 text-right" dir="rtl">
-    <div className="text-center text-xs font-semibold uppercase tracking-widest text-yellow-300">
-      סטטיסטיקות עונה — {data.leagueName}
+  // AI layout: top 10% header | 3 cards × 22% | bottom 24% table
+  <div className="flex h-full flex-col" dir="rtl">
+    {/* Header band — 10% */}
+    <div className="flex h-[10%] items-center justify-center bg-black/60">
+      <span className="text-[11px] font-semibold tracking-widest text-yellow-300">
+        סטטיסטיקות עונה — {data.leagueName}
+      </span>
     </div>
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between rounded-lg bg-black/50 px-4 py-3">
-        <span className="text-2xl">🥅</span>
-        <div className="flex-1 px-3">
-          <div className="text-xs text-gray-400">מלך שערים</div>
-          <div className="text-lg font-bold text-white">{data.topScorer?.name ?? '-'}</div>
-        </div>
-        <div className="text-2xl font-black text-yellow-400">{data.topScorer?.goals ?? 0}</div>
-      </div>
-      <div className="flex items-center justify-between rounded-lg bg-black/50 px-4 py-3">
-        <span className="text-2xl">🎯</span>
-        <div className="flex-1 px-3">
-          <div className="text-xs text-gray-400">מלך בישולים</div>
-          <div className="text-lg font-bold text-white">{data.topAssister?.name ?? '-'}</div>
-        </div>
-        <div className="text-2xl font-black text-yellow-400">{data.topAssister?.assists ?? 0}</div>
-      </div>
-      {data.mvpName && (
-        <div className="flex items-center justify-between rounded-lg bg-black/50 px-4 py-3">
-          <span className="text-2xl">🏆</span>
-          <div className="flex-1 px-3">
-            <div className="text-xs text-gray-400">MVP</div>
-            <div className="text-lg font-bold text-white">{data.mvpName}</div>
-          </div>
-        </div>
-      )}
+
+    {/* 3 stat cards — each 22% */}
+    <div className="h-[22%]">
+      <StatCard label="מלך שערים 🥅" name={data.topScorer?.name ?? '-'} value={data.topScorer?.goals ?? 0} icon="" />
     </div>
-    {data.top3.length > 0 && (
-      <div className="rounded-lg bg-black/50 px-4 py-3">
-        <div className="mb-1 text-center text-xs text-gray-400">טבלת מצב</div>
-        {data.top3.map((r, i) => (
-          <div key={r.teamName} className="flex items-center justify-between py-0.5 text-sm">
-            <span className="text-gray-300">{r.points} נק׳</span>
-            <span className="font-semibold text-white">{r.teamName}</span>
-            <span>{['🥇', '🥈', '🥉'][i]}</span>
-          </div>
-        ))}
-      </div>
-    )}
+    <div className="h-[22%]">
+      <StatCard label="מלך בישולים 🎯" name={data.topAssister?.name ?? '-'} value={data.topAssister?.assists ?? 0} icon="" />
+    </div>
+    <div className="h-[22%]">
+      <StatCard label="🏆 MVP" name={data.mvpName ?? '-'} value="" icon="" />
+    </div>
+
+    {/* Standings — bottom 24% */}
+    <div className="flex h-[24%] flex-col justify-center bg-black/65 px-6">
+      {data.top3.map((r, i) => (
+        <div key={r.teamName} className="flex items-center justify-between py-0.5 text-sm">
+          <span className="text-gray-300 text-xs">{r.points} נק׳</span>
+          <span className="font-semibold text-white text-sm">{r.teamName}</span>
+          <span>{['🥇', '🥈', '🥉'][i]}</span>
+        </div>
+      ))}
+    </div>
   </div>
 )
 
 const OverlayDayResults = ({ data }) => (
-  <div className="flex h-full flex-col justify-between p-5 text-right" dir="rtl">
-    <div className="text-center">
-      <div className="text-3xl font-black text-white">תוצאות היום</div>
-      {data.date && <div className="text-sm text-gray-300">{data.date}</div>}
-      <div className="text-xs text-gray-400">{data.leagueName}</div>
+  // AI layout: top third action/ball | middle third empty | bottom third table
+  <div className="flex h-full flex-col">
+    {/* Top third: transparent — AI action elements */}
+    <div className="flex h-[33%] items-center justify-center">
+      <div className="rounded-xl bg-black/70 px-6 py-3 text-center">
+        <div className="text-2xl font-black text-white">תוצאות היום</div>
+        {data.date && <div className="text-xs text-gray-300">{data.date}</div>}
+        <div className="text-[10px] text-gray-400">{data.leagueName}</div>
+      </div>
     </div>
-    <div className="text-center">
-      <div className="text-6xl font-black text-yellow-400">{data.gamesCount}</div>
-      <div className="text-sm text-gray-300">משחקים הופעלו</div>
+    {/* Middle third: big number, semi-transparent */}
+    <div className="flex h-[33%] items-center justify-center">
+      <div className="text-center">
+        <div className="text-6xl font-black text-yellow-400 drop-shadow-lg">{data.gamesCount}</div>
+        <div className="text-sm text-gray-200">משחקים</div>
+      </div>
     </div>
+    {/* Bottom third: standings table */}
     {data.top3.length > 0 && (
-      <div className="rounded-lg bg-black/50 px-4 py-3">
-        <div className="mb-1 text-center text-xs text-gray-400">טבלת מצב</div>
+      <div className="flex h-[34%] flex-col justify-center bg-black/70 px-6" dir="rtl">
         {data.top3.map((r, i) => (
           <div key={r.teamName} className="flex items-center justify-between py-0.5 text-sm">
-            <span className="text-gray-300">{r.points} נק׳</span>
+            <span className="text-gray-300 text-xs">{r.points} נק׳</span>
             <span className="font-semibold text-white">{r.teamName}</span>
             <span>{['🥇', '🥈', '🥉'][i]}</span>
           </div>
@@ -145,14 +164,15 @@ const OverlayDayResults = ({ data }) => (
 )
 
 const OverlaySquads = ({ data }) => (
-  <div className="flex h-full flex-col p-4 text-right" dir="rtl">
-    <div className="mb-3 text-center text-sm font-semibold text-yellow-300">{data.leagueName} — סגלי קבוצות</div>
-    <div className="flex flex-1 flex-wrap gap-2">
+  // AI has vertical columns with dark interiors — overlay text inside each column
+  <div className="flex h-full flex-col p-3" dir="rtl">
+    <div className="mb-2 text-center text-xs font-semibold text-yellow-300">{data.leagueName} — סגלי קבוצות</div>
+    <div className="flex flex-1 gap-2">
       {data.teams.map((team) => (
-        <div key={team.name} className="min-w-[120px] flex-1 rounded-lg bg-black/60 px-3 py-2">
-          <div className="mb-1 font-bold text-white">{team.name}</div>
+        <div key={team.name} className="flex-1 rounded-lg bg-black/75 px-2 py-2">
+          <div className="mb-1 border-b border-yellow-600/40 pb-1 text-sm font-bold text-yellow-300">{team.name}</div>
           {team.players.map((name) => (
-            <div key={name} className="text-xs text-gray-300">{name}</div>
+            <div key={name} className="text-[11px] leading-5 text-gray-200">{name}</div>
           ))}
         </div>
       ))}
@@ -355,7 +375,6 @@ const GenerateImageModal = ({
               style={{ aspectRatio: '1 / 1' }}
             >
               <img src={imageSrc} alt="רקע" className="absolute inset-0 h-full w-full object-cover" />
-              <div className="absolute inset-0 bg-black/40" />
               <div className="absolute inset-0 text-white" dir="rtl">
                 <OverlayContent type={selected} data={overlayData} />
               </div>
