@@ -13,7 +13,14 @@
     "db:seed:dev": "SUPABASE_TARGET_DATASET=dev node scripts/migrate-mock-data-to-supabase.mjs",
     "db:reset:dev": "ALLOW_DEV_DB_RESET=true SUPABASE_TARGET_DATASET=dev SEED_AFTER_RESET=false node scripts/reset-supabase-dataset.mjs",
     "db:seed:test": "SUPABASE_TARGET_DATASET=test node scripts/migrate-mock-data-to-supabase.mjs",
-    "db:reset:test": "SUPABASE_TARGET_DATASET=test node scripts/reset-supabase-dataset.mjs"
+    "db:reset:test": "SUPABASE_TARGET_DATASET=test node scripts/reset-supabase-dataset.mjs",
+    "lite:dev": "VITE_LITE_MODE=true VITE_SUPABASE_DEV_SCHEMA=soccerlite_dev VITE_SUPABASE_TEST_SCHEMA=soccerlite_test VITE_SUPABASE_PROD_SCHEMA=soccerlite_prod vite --port 5174",
+    "lite:build": "VITE_LITE_MODE=true VITE_SUPABASE_DEV_SCHEMA=soccerlite_dev VITE_SUPABASE_TEST_SCHEMA=soccerlite_test VITE_SUPABASE_PROD_SCHEMA=soccerlite_prod vite build",
+    "lite:test:e2e": "VITE_LITE_MODE=true VITE_DEFAULT_DATASET=test playwright test --config=playwright.lite.config.js",
+    "lite:db:seed:dev": "SUPABASE_DEV_SCHEMA=soccerlite_dev ALLOW_DEV_DB_RESET=true SUPABASE_TARGET_DATASET=dev node scripts/lite/seed-lite-leagues.mjs dev",
+    "lite:db:seed:test": "SUPABASE_TEST_SCHEMA=soccerlite_test SUPABASE_TARGET_DATASET=test node scripts/lite/seed-lite-leagues.mjs test",
+    "lite:db:seed:prod": "SUPABASE_PROD_SCHEMA=soccerlite_prod ALLOW_PROD_WRITES=true SUPABASE_TARGET_DATASET=prod node scripts/lite/seed-lite-leagues.mjs prod",
+    "lite:db:reset:test": "SUPABASE_TEST_SCHEMA=soccerlite_test SUPABASE_TARGET_DATASET=test node scripts/reset-supabase-dataset.mjs"
   },
   "dependencies": {
     "html2canvas": "^1.4.1",

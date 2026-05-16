@@ -5,6 +5,7 @@ import ScoreBoard from '../components/ScoreBoard'
 import ShareButton from '../components/ShareButton'
 import { APP_CONFIG } from '../config'
 import { useAppContext } from '../hooks/useAppContext'
+import { IS_LITE_MODE } from '../utils/storageConfig'
 import { getLeagueModeLabels, getLeagueTypeLabel, LEAGUE_TYPES } from '../utils/leagueUtils'
 import { calculateLeagueStandings, calculatePlayerStats, getLeaders } from '../utils/tournamentUtils'
 import { buildLeagueShareUrl, generateOverallShareMessage } from '../utils/shareUtils'
@@ -44,7 +45,7 @@ const Stats = () => {
   if (!league) return null
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="stats-page">
       {showGenerateModal && (
         <GenerateImageModal
           onClose={() => setShowGenerateModal(false)}
@@ -65,16 +66,18 @@ const Stats = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowGenerateModal(true)}
-                data-testid="generate-image-btn-stats"
-                className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700"
-                title="ייצר תמונה AI"
-              >
-                <span>✨</span>
-                <span className="hidden sm:inline">ייצר תמונה</span>
-              </button>
+              {!IS_LITE_MODE && (
+                <button
+                  type="button"
+                  onClick={() => setShowGenerateModal(true)}
+                  data-testid="generate-image-btn-stats"
+                  className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700"
+                  title="ייצר תמונה AI"
+                >
+                  <span>✨</span>
+                  <span className="hidden sm:inline">ייצר תמונה</span>
+                </button>
+              )}
               <ShareButton message={overallShareMsg} label="שתף סטט׳ ליגה" name="overall" />
             </div>
         </div>

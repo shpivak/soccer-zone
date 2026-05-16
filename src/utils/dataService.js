@@ -96,6 +96,8 @@ const migrateLeague = (league) => ({
   seasonLabel: league.seasonLabel?.trim() || '2026',
   allowRosterEdits: league.allowRosterEdits === true,
   ...(league.coachId ? { coachId: league.coachId } : {}),
+  // Lite mode: carry adminPassword through so auth check in App can compare it
+  ...(league.adminPassword !== undefined ? { adminPassword: league.adminPassword } : {}),
   teams: (league.teams ?? []).map((team, index) => ({
     ...team,
     id: team.id ?? `team${index + 1}`,
@@ -120,7 +122,7 @@ const migrateTournament = (tournament, index) => ({
   year: tournament.year ?? (Number((tournament.date ?? '').slice(0, 4)) || new Date().getFullYear()),
   teams: (tournament.teams ?? []).map((team, teamIndex) => ({
     ...team,
-    color: team.color === 'red' ? 'black' : team.color === 'green' ? 'pink' : team.color,
+    color: team.color === 'red' ? 'black' : team.color,
     id: team.id ?? `team${teamIndex + 1}`,
     name: normalizeTeamName(team.name ?? ''),
     players: Array.isArray(team.players) ? team.players : [],

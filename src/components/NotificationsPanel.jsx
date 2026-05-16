@@ -5,7 +5,7 @@ import { getTeamDisplayName } from '../utils/leagueUtils'
 // const WEEKLY_REMINDER_KEY = 'soccer-zone-weekly-reminder'
 
 const colorEmoji = {
-  black: '⚫', yellow: '🟡', pink: '🟣', orange: '🟠',
+  black: '⚫', yellow: '🟡', pink: '🟣', green: '🟢', orange: '🟠',
   blue: '🔵', gray: '⚪', white: '⚪',
 }
 

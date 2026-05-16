@@ -27,10 +27,13 @@ const createSessionTeams = (league, sessions = []) => {
     return getRegularLeagueBaseTeams(league, sessions)
   }
 
-  const teamCount =
-    league?.type === LEAGUE_TYPES.friendly
-      ? APP_CONFIG.friendly.teamsCount
-      : APP_CONFIG.tournament.teamsCount
+  if (league?.type === LEAGUE_TYPES.tournament) {
+    // Start empty — user picks colors and they become teams via AddTeamForm
+    return []
+  }
+
+  // friendly: pre-populate with default team count
+  const teamCount = APP_CONFIG.friendly.teamsCount
   return Array.from({ length: teamCount }, (_, index) => ({
     id: `team${index + 1}`,
     color: APP_CONFIG.teamColors[index] ?? 'gray',

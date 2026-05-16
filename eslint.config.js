@@ -7,7 +7,7 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores(['dist']),
   {
-    files: ['playwright.config.js'],
+    files: ['playwright.config.js', 'playwright.lite.config.js'],
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.node,

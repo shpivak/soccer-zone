@@ -25,6 +25,6 @@ export const APP_CONFIG = {
     draw: 1,
     loss: 0,
   },
-  teamColors: ['black', 'yellow', 'pink', 'blue', 'orange', 'red', 'white'],
-  allowedTeamColors: ['black', 'yellow', 'pink', 'orange', 'blue', 'red', 'gray', 'white'],
+  teamColors: ['black', 'yellow', 'pink', 'blue', 'green', 'orange', 'red', 'white'],
+  allowedTeamColors: ['black', 'yellow', 'pink', 'green', 'orange', 'blue', 'red', 'gray', 'white'],
 }

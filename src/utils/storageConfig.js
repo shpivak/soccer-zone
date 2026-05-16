@@ -43,6 +43,16 @@ export const SUPABASE_TIMEOUT_MS = Number(import.meta.env.VITE_SUPABASE_TIMEOUT_
 
 export const isSupabaseConfigured = () => STORAGE_PROVIDER === 'supabase' && Boolean(SUPABASE_URL && SUPABASE_ANON_KEY)
 
+/** True when building/running as Soccer Lite (VITE_LITE_MODE=true). */
+export const IS_LITE_MODE = toBoolean(import.meta.env.VITE_LITE_MODE, false)
+
+/**
+ * Super password required to create a new league in lite mode.
+ * Falls back to a hard-coded default so dev works without the env var.
+ */
+/** Required to create a new league in lite mode. Must be set via VITE_LITE_SUPER_PASSWORD env var. */
+export const LITE_SUPER_PASSWORD = import.meta.env.VITE_LITE_SUPER_PASSWORD?.trim() ?? ''
+
 /** Always the dataset baked into this build. Ignores any stale localStorage / caller hints. */
 export const resolveDataset = (_ignored) => DEFAULT_DATASET
 
