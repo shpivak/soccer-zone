@@ -140,6 +140,9 @@ Browser config:
 - `VITE_ENABLE_PROD_DATASET=false`
 - `VITE_ENABLE_TEST_RESET=true`
 - `VITE_ENABLE_PROD_RESET=false`
+- `VITE_COACHES=EnglishId:שםבעברית:password;...` — semicolon-separated coach credentials
+- `VITE_GEMINI_API_KEY=...` — required for AI image generation
+- `VITE_ADMIN_PASSWORD=...` — admin panel password
 
 Script and test config:
 
@@ -149,6 +152,15 @@ Script and test config:
 - `SUPABASE_TEST_SCHEMA=soccer_zone_test`
 - `SUPABASE_PROD_SCHEMA=soccer_zone_prod`
 - `ALLOW_PROD_DB_RESET=false`
+
+> **Important — `VITE_*` vars are baked in at build time by Vite.**
+> They are not read at runtime from the server. This means:
+>
+> - Adding or changing a `VITE_*` GitHub Secret alone is not enough — you must also trigger a new deploy (push to `main` or run the workflow manually via `workflow_dispatch`).
+> - The deployed bundle will silently have the variable empty if it was missing when `npm run build` ran, even if the secret exists in GitHub Settings.
+> - To verify: check CI build logs for the variable name, or temporarily add `console.log(import.meta.env.VITE_FOO)` in the app.
+>
+> All `VITE_*` secrets used by the deploy must be listed in `.github/workflows/deploy-pages.yml` under the `Build site` step's `env:` block. See that file for the current list.
 
 ## One-Time Migration
 
