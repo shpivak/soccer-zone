@@ -1555,15 +1555,16 @@ test.describe('Generate Image Modal', () => {
     await expect(page.getByTestId('generate-result-image')).toBeVisible({ timeout: 5000 })
   })
 
-  test('squads button available in friendly and regular team sections', async ({ page }) => {
+  test('squads button available in friendly and tournament team sections', async ({ page }) => {
     await enableAdminMode(page)
 
     // Friendly league
     await page.getByTestId('league-select').selectOption('friendly-1')
     await expect(page.getByTestId('generate-image-btn-squads')).toBeVisible()
 
-    // Regular league — team builder section requires admin mode
-    await page.getByTestId('league-select').selectOption('regular-1')
+    // Tournament league — squads button is in the "בניית קבוצות" section
+    await page.getByTestId('league-select').selectOption('tournament-1')
+    await page.getByTestId('tournament-select').selectOption({ index: 1 })
     await expect(page.getByTestId('generate-image-btn-squads')).toBeVisible()
   })
 })
