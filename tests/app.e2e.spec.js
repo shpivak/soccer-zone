@@ -1485,7 +1485,8 @@ test.describe('Generate Image Modal', () => {
 
     const hasImage = await page.getByTestId('generate-result-image').isVisible()
     if (hasImage) {
-      const src = await page.getByTestId('generate-result-image').getAttribute('src')
+      // generate-result-image is now a div wrapper; the actual image is inside
+      const src = await page.getByTestId('generate-result-image').locator('img').first().getAttribute('src')
       expect(src).toMatch(/^data:image\//)
     } else {
       // Quota / API error — verify a human-readable message is shown
@@ -1544,10 +1545,10 @@ test.describe('Generate Image Modal', () => {
     // Edit prompt toggle immediately visible (squads auto-selected)
     await expect(page.getByTestId('edit-prompt-toggle')).toBeVisible()
 
-    // Open drawer and verify prompt contains team/squad content
+    // Open drawer and verify prompt contains squad-related content
     await page.getByTestId('edit-prompt-toggle').click()
     const prompt = await page.getByTestId('edit-prompt-textarea').inputValue()
-    expect(prompt).toContain('סגלי הקבוצות')
+    expect(prompt).toContain('soccer team roster')
 
     // Generate works directly
     await page.getByTestId('generate-submit').click()
@@ -1555,11 +1556,13 @@ test.describe('Generate Image Modal', () => {
   })
 
   test('squads button available in friendly and regular team sections', async ({ page }) => {
+    await enableAdminMode(page)
+
     // Friendly league
     await page.getByTestId('league-select').selectOption('friendly-1')
     await expect(page.getByTestId('generate-image-btn-squads')).toBeVisible()
 
-    // Regular league
+    // Regular league — team builder section requires admin mode
     await page.getByTestId('league-select').selectOption('regular-1')
     await expect(page.getByTestId('generate-image-btn-squads')).toBeVisible()
   })

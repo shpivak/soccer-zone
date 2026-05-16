@@ -1,7 +1,7 @@
 const GEMINI_MODEL = 'gemini-2.5-flash-image'
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 
-export const generateImage = async (prompt) => {
+const callGemini = async (parts) => {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY
   if (!apiKey) throw new Error('VITE_GEMINI_API_KEY is not set')
 
@@ -9,7 +9,7 @@ export const generateImage = async (prompt) => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
+      contents: [{ parts }],
       generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
     }),
   })
@@ -25,3 +25,11 @@ export const generateImage = async (prompt) => {
 
   return `data:${inlineData.mimeType};base64,${inlineData.data}`
 }
+
+// Text-only generation (no uploaded photo)
+export const generateImage = (prompt) =>
+  callGemini([{ text: prompt }])
+
+// Image + text generation (uploaded photo as input)
+export const generateImageWithPhoto = (prompt, base64, mimeType) =>
+  callGemini([{ text: prompt }, { inlineData: { mimeType, data: base64 } }])
