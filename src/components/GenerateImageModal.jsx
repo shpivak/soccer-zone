@@ -150,29 +150,48 @@ const OverlayStatsTable = ({ data, config = {} }) => (
 )
 
 const OverlayDayResults = ({ data, config = {} }) => (
-  <div className="flex h-full flex-col">
-    <div className="flex h-[33%] items-center justify-center">
-      <div className="rounded-xl bg-black/70 px-6 py-3 text-center">
-        <div className="text-2xl font-black text-white">תוצאות היום</div>
-        {config.date !== false && data.date && <div className="text-xs text-gray-300">{data.date}</div>}
-        <div className="text-[10px] text-gray-400">{data.leagueName}</div>
+  <div className="flex h-full flex-col" dir="rtl">
+    {/* Header */}
+    <div className="flex h-[15%] items-center justify-center bg-black/70 px-4">
+      <div className="flex w-full items-center justify-between">
+        <div className="text-[9px] text-gray-400">{data.leagueName}</div>
+        <div className="text-lg font-black text-white">תוצאות היום ⚽</div>
+        {config.date !== false && data.date
+          ? <div className="text-[9px] text-gray-300">{data.date}</div>
+          : <div className="w-10" />}
       </div>
     </div>
-    <div className="flex h-[33%] items-center justify-center">
-      {config.gamesCount !== false && (
-        <div className="text-center">
-          <div className="text-6xl font-black text-yellow-400 drop-shadow-lg">{data.gamesCount}</div>
-          <div className="text-sm text-gray-200">משחקים</div>
+
+    {/* Game results */}
+    {config.gameResults !== false && data.gameResults?.length > 0 && (
+      <div className="flex flex-col justify-center gap-1 bg-black/55 px-4 py-2" style={{ flex: '0 0 50%' }}>
+        {data.gameResults.map((g, i) => (
+          <div key={i} className="flex items-center justify-between rounded-lg bg-black/50 px-3 py-1.5">
+            <span className="w-[38%] truncate text-right text-sm font-semibold text-white">{g.teamA}</span>
+            <span className="w-[24%] text-center text-lg font-black text-yellow-400">
+              {g.scoreA} – {g.scoreB}
+            </span>
+            <span className="w-[38%] truncate text-left text-sm font-semibold text-white">{g.teamB}</span>
+          </div>
+        ))}
+      </div>
+    )}
+
+    {/* Standings */}
+    {config.standings !== false && data.standings?.length > 0 && (
+      <div className="flex flex-1 flex-col justify-center bg-black/70 px-4 py-2">
+        <div className="mb-1 flex items-center justify-between text-[9px] font-semibold uppercase tracking-wide text-gray-400">
+          <span className="w-8 text-center">#</span>
+          <span className="flex-1">קבוצה</span>
+          <span className="w-10 text-center">נק׳</span>
+          <span className="w-10 text-center">±</span>
         </div>
-      )}
-    </div>
-    {config.standings !== false && data.top3.length > 0 && (
-      <div className="flex h-[34%] flex-col justify-center bg-black/70 px-6" dir="rtl">
-        {data.top3.map((r, i) => (
+        {data.standings.map((r) => (
           <div key={r.teamName} className="flex items-center justify-between py-0.5 text-sm">
-            <span className="text-xs text-gray-300">{r.points} נק׳</span>
-            <span className="font-semibold text-white">{r.teamName}</span>
-            <span>{['🥇', '🥈', '🥉'][i]}</span>
+            <span className="w-8 text-center text-xs text-gray-400">{r.rank}</span>
+            <span className="flex-1 font-semibold text-white">{r.teamName}</span>
+            <span className="w-10 text-center font-bold text-yellow-400">{r.points}</span>
+            <span className="w-10 text-center text-xs text-gray-300">{r.goalDiff > 0 ? `+${r.goalDiff}` : r.goalDiff}</span>
           </div>
         ))}
       </div>
@@ -442,7 +461,7 @@ const GenerateImageModal = ({
                   data-testid="photo-toggle"
                   className="accent-green-600"
                 />
-                📷 תמונה
+                📷 העלה תמונה
               </label>
             </div>
 

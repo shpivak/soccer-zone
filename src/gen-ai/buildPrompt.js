@@ -39,9 +39,9 @@ const buildBackgroundPrompt = (type) => {
   if (type === 'day-results') {
     return (
       'Dark energetic soccer match-day results poster background. ' +
-      'Top third: dynamic light streaks and large soccer ball in motion. ' +
-      'Middle third: completely plain dark band. ' +
-      'Bottom third: dark panel with faint horizontal divider lines only. ' +
+      'Top 15%: plain dark header strip. ' +
+      'Middle 50%: plain dark band with very faint horizontal divider lines for match rows. ' +
+      'Bottom 35%: dark panel with faint horizontal divider lines for standings rows. ' +
       BASE_STYLE
     )
   }
@@ -96,12 +96,17 @@ const buildFullAiPrompt = (type, { stats = [], leaders = {}, standings = [], lea
   }
   if (type === 'day-results') {
     const date = session?.date ?? ''
-    const gamesCount = (session?.games ?? []).filter((g) => g.played !== false).length
-    const top3 = standings.slice(0, 3).map((r, i) => `${i + 1}. ${r.teamName}`).join(', ')
+    const teams = session?.teams ?? []
+    const teamById = Object.fromEntries(teams.map((t) => [t.id, t]))
+    const playedGames = (session?.games ?? []).filter((g) => g.played !== false && g.score)
+    const resultLines = playedGames
+      .map((g) => `${teamById[g.teamA]?.name ?? g.teamA} ${g.score.a}–${g.score.b} ${teamById[g.teamB]?.name ?? g.teamB}`)
+      .join(', ')
+    const top3 = standings.slice(0, 3).map((r, i) => `${i + 1}. ${r.teamName} (${r.points}pts)`).join(', ')
     return (
       `Soccer match-day results poster for "${leagueName}"${date ? ` on ${date}` : ''}. ` +
-      `${gamesCount} games played. Standings: ${top3}. ` +
-      `Bold "תוצאות היום" header, results and table. Dynamic, energetic design. ${style}`
+      `Results: ${resultLines}. Standings: ${top3}. ` +
+      `Bold "תוצאות היום" header, match scores and standings table. Dynamic, energetic design. ${style}`
     )
   }
   if (type === 'squads') {
@@ -171,11 +176,20 @@ export const buildOverlayData = (type, { stats = [], leaders = {}, standings = [
     }
   }
   if (type === 'day-results') {
+    const teams = session?.teams ?? []
+    const teamById = Object.fromEntries(teams.map((t) => [t.id, t]))
+    const playedGames = (session?.games ?? []).filter((g) => g.played !== false && g.score)
+    const gameResults = playedGames.map((g) => ({
+      teamA: teamById[g.teamA]?.name ?? g.teamA,
+      teamB: teamById[g.teamB]?.name ?? g.teamB,
+      scoreA: g.score.a,
+      scoreB: g.score.b,
+    }))
     return {
       type: 'day-results', leagueName,
       date: session?.date ?? '',
-      gamesCount: (session?.games ?? []).filter((g) => g.played !== false).length,
-      top3: standings.slice(0, 3),
+      gameResults,
+      standings: standings.map((r, i) => ({ rank: i + 1, teamName: r.teamName, points: r.points, goalDiff: r.goalDiff ?? 0 })),
     }
   }
   if (type === 'squads') {
@@ -212,8 +226,8 @@ export const OVERLAY_FIELDS = {
     { key: 'leagueName', label: 'שם ליגה' },
   ],
   'day-results': [
-    { key: 'gamesCount', label: 'מספר משחקים' },
     { key: 'date', label: 'תאריך' },
+    { key: 'gameResults', label: 'תוצאות משחקים' },
     { key: 'standings', label: 'טבלת מצב' },
   ],
   'squads': [], // built dynamically from teams
