@@ -14,6 +14,7 @@ if (process.env.VITE_DEFAULT_DATASET !== 'test') {
 
 export default defineConfig({
   testDir: './tests',
+  testMatch: '**/app.e2e.spec.js',
   fullyParallel: false,
   retries: 0,
   use: {

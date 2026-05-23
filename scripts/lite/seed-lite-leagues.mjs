@@ -47,26 +47,9 @@ const LITE_LEAGUES = {
     },
   ],
   prod: () => [
-    {
-      id: 'my-prod-league',
-      name: 'My Prod League',
-      type: 'tournament',
-      seasonLabel: '',
-      allowRosterEdits: false,
-      teams: [],
-      adminPassword: requirePass('LITE_PROD_LEAGUE_PASSWORD'),
-    },
-    {
-      // friday-hodash is prod-only. Its password must be set as LITE_FRIDAY_HODASH_PASSWORD
-      // in the CI/GH environment — it is NOT stored in .env.local.
-      id: 'friday-hodash',
-      name: 'Friday Hodash',
-      type: 'tournament',
-      seasonLabel: '',
-      allowRosterEdits: false,
-      teams: [],
-      adminPassword: requirePass('LITE_FRIDAY_HODASH_PASSWORD'),
-    },
+    // Prod leagues are created through the app UI using the super password.
+    // To seed additional prod leagues from this script, add them to a
+    // gitignored file (e.g. .lite.prod.leagues.json) and read it here.
   ],
 }
 

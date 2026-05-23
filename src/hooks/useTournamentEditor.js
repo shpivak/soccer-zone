@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { APP_CONFIG } from '../config'
 import { LEAGUE_TYPES } from '../utils/leagueUtils'
+import { IS_LITE_MODE } from '../utils/storageConfig'
 
 const cloneTeams = (teams = []) =>
   teams.map((team) => ({
@@ -28,8 +29,17 @@ const createSessionTeams = (league, sessions = []) => {
   }
 
   if (league?.type === LEAGUE_TYPES.tournament) {
-    // Start empty — user picks colors and they become teams via AddTeamForm
-    return []
+    if (IS_LITE_MODE) {
+      // In lite mode: start empty — user picks colors and they become teams via AddTeamForm
+      return []
+    }
+    // In regular mode: pre-populate with default tournament team count
+    return Array.from({ length: APP_CONFIG.tournament.teamsCount }, (_, index) => ({
+      id: `team${index + 1}`,
+      color: APP_CONFIG.teamColors[index] ?? 'gray',
+      name: '',
+      players: [],
+    }))
   }
 
   // friendly: pre-populate with default team count

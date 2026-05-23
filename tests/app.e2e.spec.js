@@ -1201,7 +1201,7 @@ test('all allowed team colors appear in the color picker including red', async (
   await switchToDragMode(page)
 
   const colorSelect = page.getByTestId('team-color-select-team1')
-  for (const color of ['black', 'yellow', 'pink', 'orange', 'blue', 'red', 'gray', 'white']) {
+  for (const color of ['black', 'yellow', 'pink', 'green', 'orange', 'blue', 'red', 'gray', 'white']) {
     await expect(colorSelect.locator(`option[value="${color}"]`)).toHaveCount(1)
   }
 
@@ -1325,7 +1325,7 @@ test('adding a team shows color picker form; regular league shows name input too
   // Name input should NOT appear for tournament
   await expect(page.getByTestId('add-team-name-input')).toHaveCount(0)
   // All allowed colors have swatches
-  for (const color of ['black', 'yellow', 'pink', 'orange', 'blue', 'red', 'gray', 'white']) {
+  for (const color of ['black', 'yellow', 'pink', 'green', 'orange', 'blue', 'red', 'gray', 'white']) {
     await expect(page.getByTestId(`add-team-color-swatch-${color}`)).toBeVisible()
   }
   // Pick orange, confirm — team gets that color
@@ -1741,4 +1741,58 @@ test('toggling between Zach and Admin: each sees only their expected leagues', a
   await loginAsCoach(page, 'zach')
   const zachOptionsAfter = await page.getByTestId('league-select').locator('option').allTextContents()
   expect(zachOptionsAfter.some((o) => o.includes(renamedName))).toBeTruthy()
+})
+
+// ─── Green color ───────────────────────────────────────────────────────────────
+
+test('green team color appears in color picker and renders correctly in TeamBuilder', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('create-tournament-empty').click()
+
+  // Open add-team form and pick green
+  await page.getByTestId('add-tournament-team').click()
+  await expect(page.getByTestId('add-team-color-swatch-green')).toBeVisible()
+  await page.getByTestId('add-team-color-swatch-green').click()
+  await page.getByTestId('add-team-confirm').click()
+
+  // Switch to drag mode so team-color-select is visible
+  await page.getByTestId('mode-toggle-dragging').click()
+
+  // The new team's color select should reflect green
+  const allSelects = page.locator('[data-testid^="team-color-select-"]')
+  const count = await allSelects.count()
+  let foundGreen = false
+  for (let i = 0; i < count; i++) {
+    if ((await allSelects.nth(i).inputValue()) === 'green') { foundGreen = true; break }
+  }
+  expect(foundGreen).toBeTruthy()
+})
+
+// ─── Tournament day dropdown shows date ────────────────────────────────────────
+
+test('tournament day dropdown option text shows date when no custom name is set', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('tournament-1')
+
+  // The seeded tournament has date "2026-03-01" and no custom name
+  const options = await page.locator('[data-testid="tournament-select"] option').allTextContents()
+  // At least one option should contain the date in some form
+  expect(options.some((o) => o.includes('2026-03-01') || o.includes('01/03') || o.includes('03-01'))).toBeTruthy()
+})
+
+// ─── AI image button visible in regular (non-lite) mode ────────────────────────
+
+test('AI generate image button is visible on Stats page in regular mode', async ({ page }) => {
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('tournament-3')
+  await page.getByTestId('nav-stats').click()
+  await expect(page.getByTestId('generate-image-btn-stats')).toBeVisible()
+})
+
+test('AI generate image button is visible on Live page in regular mode', async ({ page }) => {
+  await enableAdminMode(page)
+  // tournament-3 has a seeded session with games — button only renders when games > 0
+  await page.getByTestId('league-select').selectOption('tournament-3')
+  await expect(page.getByTestId('generate-image-btn-live')).toBeVisible()
 })

@@ -41,8 +41,8 @@ const _liteRedirectPath = (() => {
  * Prefers the path stored by 404.html (GitHub Pages); falls back to
  * window.location.pathname for local dev where the dev server handles SPAs.
  *
- * BASE_URL is '/soccer-lite/' in a lite Pages deploy and '/' locally.
- * Example: pathname '/soccer-lite/friday-hodash' → 'friday-hodash'
+ * BASE_URL is '/' on Firebase or local dev (lite is not hosted on GitHub Pages).
+ * Example: pathname '/my-league-slug' → 'my-league-slug'
  */
 const getLeagueSlugFromPath = () => {
   const rawPath = _liteRedirectPath || window.location.pathname
@@ -206,23 +206,28 @@ const LitePasswordScreen = ({ onAuthenticate }) => {
 // ─── LITE: league creation screen ─────────────────────────────────────────────
 const LiteLeagueSetup = ({ slug, onCreated, createLeague }) => {
   const [superPass, setSuperPass] = useState('')
-  const [leagueName, setLeagueName] = useState(slug)
+  const [leagueSlug, setLeagueSlug] = useState(slug)
+  const [leagueName, setLeagueName] = useState('')
   const [leaguePass, setLeaguePass] = useState('')
   const [error, setError] = useState('')
   const [isCreating, setIsCreating] = useState(false)
 
+  const effectiveSlug = slug || leagueSlug.trim()
+
   const handleCreate = async () => {
     if (superPass !== LITE_SUPER_PASSWORD) { setError('Invalid super password'); return }
+    if (!effectiveSlug) { setError('League URL slug is required'); return }
     if (!leaguePass.trim()) { setError('League password is required'); return }
     setIsCreating(true)
     const hash = await hashPassword(leaguePass.trim())
     createLeague({
-      id: slug,
-      name: leagueName.trim() || slug,
+      id: effectiveSlug,
+      name: leagueName.trim() || effectiveSlug,
       type: LEAGUE_TYPES.tournament,
       adminPassword: hash,
     })
     onCreated(hash)
+    if (!slug) window.history.replaceState(null, '', `/${effectiveSlug}`)
   }
 
   return (
@@ -233,9 +238,21 @@ const LiteLeagueSetup = ({ slug, onCreated, createLeague }) => {
       <div className="text-6xl">⚽</div>
       <h1 className="text-2xl font-bold text-gray-800">Soccer Lite</h1>
       <p className="text-center text-sm text-gray-600">
-        League <strong className="font-semibold text-gray-800">{slug}</strong> doesn&apos;t exist yet. Create it below.
+        {slug
+          ? <>League <strong className="font-semibold text-gray-800">{slug}</strong> doesn&apos;t exist yet. Create it below.</>
+          : 'Create a new league below.'}
       </p>
       <div className="w-full max-w-xs space-y-3">
+        {!slug && (
+          <input
+            value={leagueSlug}
+            onChange={(e) => { setLeagueSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')); setError('') }}
+            placeholder="League URL slug (e.g. my-sunday-league)"
+            data-testid="lite-setup-slug"
+            className="w-full rounded-2xl border-2 border-gray-200 bg-white px-4 py-3 text-base focus:border-green-500 focus:outline-none"
+            dir="ltr"
+          />
+        )}
         <input
           value={leagueName}
           onChange={(e) => { setLeagueName(e.target.value); setError('') }}
@@ -434,8 +451,12 @@ function App() {
   const [liteManualAuth, setLiteManualAuth] = useState(false)
   // SHA-256 hash of the ?pass= URL param (computed async at mount). Null until ready.
   const [liteUrlPassHash, setLiteUrlPassHash] = useState(null)
-  // True once we've finished hashing the URL pass (or immediately if there's no URL pass).
-  const [liteUrlPassReady, setLiteUrlPassReady] = useState(false)
+  // False only while we're waiting for the ?pass= hash to compute. True immediately
+  // when there's no URL pass (or not in lite mode), so we never call setState in an effect body.
+  const [liteUrlPassReady, setLiteUrlPassReady] = useState(() => {
+    if (!IS_LITE_MODE) return true
+    return !new URLSearchParams(window.location.search).get('pass')
+  })
 
   // ── Coach selection ──────────────────────────────────────────────────────────
   // In lite mode there are no coaches — always treat as admin so edit actions work
@@ -476,15 +497,16 @@ function App() {
   const activeCoachName = COACHES.find((c) => c.id === activeCoachId)?.name ?? null
 
   // ── LITE: hash the ?pass= URL param once at mount ───────────────────────────
+  // liteUrlPassReady starts true unless there's a ?pass= to hash, so no sync setState here.
   useEffect(() => {
-    if (!IS_LITE_MODE) { setLiteUrlPassReady(true); return }
+    if (!IS_LITE_MODE) return
     const urlPass = new URLSearchParams(window.location.search).get('pass')
-    if (!urlPass) { setLiteUrlPassReady(true); return }
+    if (!urlPass) return
     hashPassword(urlPass).then((hash) => {
       setLiteUrlPassHash(hash)
       setLiteUrlPassReady(true)
     })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // If active league isn't visible to current coach, switch to first visible one
   useEffect(() => {
@@ -702,7 +724,7 @@ function App() {
     )
   }
 
-  // Lite: league not found → offer to create it
+  // Lite: league not found (or root URL with no slug) → offer to create it
   if (IS_LITE_MODE && !leagues.some((l) => l.id === liteSlug)) {
     return (
       <LiteLeagueSetup
