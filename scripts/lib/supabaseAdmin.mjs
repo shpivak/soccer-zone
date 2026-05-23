@@ -1,8 +1,9 @@
-const DEFAULT_SCHEMAS = {
+// Read lazily so callers can override process.env after module load
+const getSchema = (dataset) => ({
   dev: process.env.SUPABASE_DEV_SCHEMA || 'soccer_zone_dev',
   test: process.env.SUPABASE_TEST_SCHEMA || 'soccer_zone_test',
   prod: process.env.SUPABASE_PROD_SCHEMA || 'soccer_zone_prod',
-}
+}[dataset])
 const LEAGUES_TABLE = 'leagues'
 const TOURNAMENTS_TABLE = 'tournaments'
 const MATCHES_TABLE = 'matches'
@@ -52,7 +53,7 @@ const getHeaders = (dataset, method) => {
     apikey: serviceRoleKey,
     Authorization: `Bearer ${serviceRoleKey}`,
     'Content-Type': 'application/json',
-    [profileHeader]: DEFAULT_SCHEMAS[dataset],
+    [profileHeader]: getSchema(dataset),
   }
 }
 
@@ -85,6 +86,8 @@ const toLeagueRow = (league) => ({
   season_label: league.seasonLabel ?? '',
   allow_roster_edits: league.allowRosterEdits === true,
   teams: league.teams ?? [],
+  // Included only when set — allows seeding lite schemas that have admin_password
+  ...(league.adminPassword !== undefined ? { admin_password: league.adminPassword } : {}),
 })
 
 const toPlayerRow = (player) => ({

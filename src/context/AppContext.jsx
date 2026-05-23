@@ -191,7 +191,7 @@ export const AppProvider = ({ children }) => {
       setPlayers: updatePlayers,
       setTournaments: updateTournaments,
       setActiveLeagueId: changeLeague,
-      createLeague: ({ name, type, id: providedId }) => {
+      createLeague: ({ name, type, id: providedId, adminPassword }) => {
         const trimmed = name?.trim() ?? ''
         const safeType = Object.values(LEAGUE_TYPES).includes(type) ? type : LEAGUE_TYPES.tournament
         const id = providedId ?? `league-${Date.now()}`
@@ -202,6 +202,8 @@ export const AppProvider = ({ children }) => {
           seasonLabel: String(new Date().getFullYear()),
           allowRosterEdits: false,
           teams: [],
+          // Lite mode: persist admin_password so the league row is saved with it
+          ...(adminPassword ? { adminPassword } : {}),
         }
         updateLeagues((current) => [...current, newLeague])
         changeLeague(id)

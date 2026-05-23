@@ -28,6 +28,7 @@ const teamColorClass = {
   black: 'bg-gray-200 border-gray-500',
   yellow: 'bg-yellow-50 border-yellow-300',
   pink: 'bg-pink-50 border-pink-300',
+  green: 'bg-green-50 border-green-300',
   orange: 'bg-orange-50 border-orange-300',
   blue: 'bg-blue-50 border-blue-300',
   gray: 'bg-gray-50 border-gray-300',

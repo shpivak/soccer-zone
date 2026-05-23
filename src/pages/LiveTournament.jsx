@@ -8,6 +8,7 @@ import TeamBuilder from '../components/TeamBuilder'
 import TournamentTable from '../components/TournamentTable'
 import { APP_CONFIG } from '../config'
 import { useAppContext } from '../hooks/useAppContext'
+import { IS_LITE_MODE } from '../utils/storageConfig'
 import { useTournamentEditor } from '../hooks/useTournamentEditor'
 import {
   applySessionCustomNameToTeams,
@@ -37,6 +38,7 @@ const teamColorLabel = {
   black: 'שחור',
   yellow: 'צהוב',
   pink: 'ורוד',
+  green: 'ירוק',
   orange: 'כתום',
   blue: 'כחול',
   red: 'אדום',
@@ -48,6 +50,7 @@ const colorPillClass = {
   black: 'bg-gray-200 border-gray-500 text-gray-900',
   yellow: 'bg-yellow-50 border-yellow-300 text-yellow-900',
   pink: 'bg-pink-50 border-pink-300 text-pink-900',
+  green: 'bg-green-50 border-green-300 text-green-900',
   orange: 'bg-orange-50 border-orange-300 text-orange-900',
   blue: 'bg-blue-50 border-blue-300 text-blue-900',
   red: 'bg-red-50 border-red-300 text-red-900',
@@ -542,7 +545,7 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
 
   const handleDeleteTournament = () => {
     if (!adminMode || !selectedTournament) return
-    if (!window.confirm(`למחוק את ${labels.selectLabel} ${selectedTournament.leagueNumber ?? ''}? פעולה זו אינה הפיכה.`)) return
+    if (!window.confirm(`למחוק את ${selectedTournament.date || `${labels.selectLabel} ${selectedTournament.leagueNumber ?? ''}`}? פעולה זו אינה הפיכה.`)) return
     const remaining = leagueTournaments.filter((t) => t.id !== selectedTournamentId)
     setTournaments((current) => current.filter((t) => t.id !== selectedTournamentId))
     setSelectedTournamentId(remaining[remaining.length - 1]?.id ?? null)
@@ -639,7 +642,7 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
           >
             {leagueTournaments.map((tournament) => (
               <option key={tournament.id} value={tournament.id}>
-                {league.name} {getSessionDisplayName(tournament, league)} / {tournament.year ?? '-'} - {tournament.date}
+                {tournament.name?.trim() || tournament.date || getSessionDisplayName(tournament, league)}
               </option>
             ))}
           </select>
@@ -649,7 +652,7 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
             data-testid="create-tournament"
             className="shrink-0 min-h-[44px] rounded-xl bg-green-600 px-4 py-2.5 text-sm text-white disabled:opacity-40"
           >
-            {labels.createAnother}
+            {IS_LITE_MODE && league?.type === LEAGUE_TYPES.tournament ? 'הוסף יום משחק' : labels.createAnother}
           </button>
           {adminMode && league?.type === LEAGUE_TYPES.regular && (league.teams?.length ?? 0) >= 2 && (
             <button
@@ -704,13 +707,13 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
                 />
               ) : (
                 <>
-                  <span className="flex-1 text-sm text-gray-700">{getSessionDisplayName(selectedTournament, league)}</span>
+                  <span className="flex-1 text-sm text-gray-700">
+                    {selectedTournament.name?.trim() || selectedTournament.date || ''}
+                  </span>
                   <button
                     type="button"
                     onClick={() => {
-                      const defaultName =
-                        selectedTournament.name ||
-                        `${getSessionDisplayName(selectedTournament, league)} / ${selectedTournament.date ?? ''}`
+                      const defaultName = selectedTournament.name || (selectedTournament.date ?? '')
                       setNameEditValue(defaultName)
                       setEditingTournamentName(true)
                     }}
@@ -740,16 +743,18 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <ShareButton message={dayShareMsg} label="שתף תוצאות היום" name="day" />
             <ShareButton message={combinedShareMsg} label="שתף יום + סטט׳ ליגה" name="combined" />
-            <button
-              type="button"
-              onClick={() => openGenerateModal('live')}
-              data-testid="generate-image-btn-live"
-              className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700"
-              title="ייצר תמונה AI"
-            >
-              <span>✨</span>
-              <span className="hidden sm:inline">ייצר תמונה</span>
-            </button>
+            {!IS_LITE_MODE && (
+              <button
+                type="button"
+                onClick={() => openGenerateModal('live')}
+                data-testid="generate-image-btn-live"
+                className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700"
+                title="ייצר תמונה AI"
+              >
+                <span>✨</span>
+                <span className="hidden sm:inline">ייצר תמונה</span>
+              </button>
+            )}
           </div>
         ) : null}
       </div>
@@ -965,7 +970,7 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
       {tournamentTopStats && (
         <section className="rounded-2xl bg-white p-4 shadow-sm">
           <h3 className="mb-2 text-sm font-bold text-gray-700">
-            ראשי קטגוריות – {getSessionDisplayName(selectedTournament, league)}
+            ראשי קטגוריות – {selectedTournament.name?.trim() || selectedTournament.date || ''}
           </h3>
           <div className="flex flex-wrap gap-4 text-sm">
             {tournamentTopStats.topScorers.length > 0 && (

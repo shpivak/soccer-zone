@@ -49,6 +49,7 @@ const colorLabel = {
   black: 'שחור',
   yellow: 'צהוב',
   pink: 'ורוד',
+  green: 'ירוק',
   orange: 'כתום',
   blue: 'כחול',
   gray: 'אפור',

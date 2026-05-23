@@ -1,5 +1,5 @@
 import { defaultLeagues } from './defaultData'
-import { getSchemaForDataset, SUPABASE_ANON_KEY, SUPABASE_TIMEOUT_MS, SUPABASE_URL } from './storageConfig'
+import { getSchemaForDataset, IS_LITE_MODE, SUPABASE_ANON_KEY, SUPABASE_TIMEOUT_MS, SUPABASE_URL } from './storageConfig'
 
 const LEAGUES_TABLE = 'leagues'
 const PLAYERS_TABLE = 'players'
@@ -35,7 +35,10 @@ const toLeagueRow = (league) => ({
   season_label: league.seasonLabel ?? '',
   allow_roster_edits: league.allowRosterEdits === true,
   teams: league.teams ?? [],
-  ...(leagueCoachIdColumnSupported !== false ? { coach_id: league.coachId ?? null } : {}),
+  // Lite schemas have admin_password; soccer-zone schemas have coach_id — never both
+  ...(IS_LITE_MODE
+    ? { admin_password: league.adminPassword ?? '' }
+    : leagueCoachIdColumnSupported !== false ? { coach_id: league.coachId ?? null } : {}),
 })
 
 const fromLeagueRow = (row) => ({
@@ -45,7 +48,9 @@ const fromLeagueRow = (row) => ({
   seasonLabel: row.season_label ?? '',
   allowRosterEdits: row.allow_roster_edits === true,
   teams: Array.isArray(row.teams) ? row.teams : [],
-  ...(row.coach_id ? { coachId: row.coach_id } : {}),
+  ...(IS_LITE_MODE
+    ? { adminPassword: row.admin_password ?? '' }
+    : row.coach_id ? { coachId: row.coach_id } : {}),
 })
 
 const toPlayerRow = (player) => ({
@@ -234,6 +239,14 @@ export const loadDatasetFromSupabase = async (dataset) => {
     }
   }
   const fetchLeagues = async () => {
+    // Lite schemas have admin_password instead of coach_id — use a single fixed query
+    if (IS_LITE_MODE) {
+      return request(
+        dataset,
+        `${LEAGUES_TABLE}?select=id,name,type,season_label,allow_roster_edits,teams,admin_password&order=name.asc`,
+      )
+    }
+
     const fetchWithCoachId = () =>
       request(dataset, `${LEAGUES_TABLE}?select=id,name,type,season_label,allow_roster_edits,teams,coach_id&order=name.asc`)
     const fetchWithoutCoachId = () =>
@@ -252,6 +265,23 @@ export const loadDatasetFromSupabase = async (dataset) => {
       }
       if (isMissingTableError(error, LEAGUES_TABLE)) return defaultLeagues
       throw error
+    }
+  }
+
+  // Lite mode: load leagues first so the auth/creation screen appears immediately
+  // without waiting for players/tournaments/matches. If leagues fail (e.g. schema
+  // not exposed), we abort early rather than firing three more failing requests.
+  if (IS_LITE_MODE) {
+    const leaguesRows = await fetchLeagues()
+    const [playerRows, tournamentRows, matchRows] = await Promise.all([
+      fetchPlayers(),
+      request(dataset, `${TOURNAMENTS_TABLE}?select=id,date,league_number,league_id,year,teams&order=league_id.asc,date.asc`),
+      request(dataset, `${MATCHES_TABLE}?select=id,tournament_id,league_id,round,team_a,team_b,score,events&order=tournament_id.asc,round.asc,id.asc`),
+    ])
+    return {
+      leagues: (leaguesRows ?? []).map(fromLeagueRow),
+      players: (playerRows ?? []).map(fromPlayerRow),
+      tournaments: withMatchesAttached((tournamentRows ?? []).map(fromTournamentRow), matchRows ?? []),
     }
   }
 
@@ -312,7 +342,8 @@ export const saveLeaguesToSupabase = async (dataset, leagues, { keepalive = fals
     await postLeagues(leagues.map(toLeagueRow))
     await deleteRemovedRows(dataset, LEAGUES_TABLE, new Set(leagues.map((league) => league.id)))
   } catch (error) {
-    if (isMissingCoachIdColumnError(error)) {
+    // Lite mode uses admin_password instead of coach_id — no fallback needed
+    if (!IS_LITE_MODE && isMissingCoachIdColumnError(error)) {
       leagueCoachIdColumnSupported = false
       await postLeagues(leagues.map(toLeagueRow)) // retry without coach_id (flag now false)
       await deleteRemovedRows(dataset, LEAGUES_TABLE, new Set(leagues.map((league) => league.id)))

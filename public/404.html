@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      // SPA redirect for GitHub Pages path-based routing (Soccer Lite).
+      // GitHub Pages serves this file when a path like /my-league-slug
+      // has no matching static file.  We capture the intended path, store it in
+      // sessionStorage, then redirect to the app root so index.html can boot.
+      //
+      // Strategy: strip the last path segment to infer the base URL.
+      //   /soccer-zone/my-league-slug  →  base = /soccer-zone/
+      //   /my-league-slug              →  base = /
+      sessionStorage.setItem('__lite_redirect_path', location.pathname)
+      var segs = location.pathname.split('/').filter(Boolean)
+      segs.pop() // remove the leaf segment (league slug)
+      var base = segs.length ? '/' + segs.join('/') + '/' : '/'
+      location.replace(location.origin + base)
+    </script>
+  </head>
+</html>

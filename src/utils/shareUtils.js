@@ -7,6 +7,7 @@ const colorEmoji = {
   black: '⚫',
   yellow: '🟡',
   pink: '🟣',
+  green: '🟢',
   orange: '🟠',
   blue: '🔵',
   white: '⚪',
