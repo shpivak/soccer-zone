@@ -46,6 +46,9 @@ export const isSupabaseConfigured = () => STORAGE_PROVIDER === 'supabase' && Boo
 /** True when building/running as Soccer Lite (VITE_LITE_MODE=true). */
 export const IS_LITE_MODE = toBoolean(import.meta.env.VITE_LITE_MODE, false)
 
+/** When false (default): hides advanced/verbose UI — share-stats, generate-image, cards, timer, match description. */
+export const VERBOSE_BUTTON = toBoolean(import.meta.env.VITE_VERBOSE_BUTTON, false)
+
 /**
  * Super password required to create a new league in lite mode.
  * Falls back to a hard-coded default so dev works without the env var.

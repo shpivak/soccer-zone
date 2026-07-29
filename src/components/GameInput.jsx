@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getTeamDisplayName } from '../utils/leagueUtils'
+import { VERBOSE_BUTTON } from '../utils/storageConfig'
 
 const createGoalEvent = (teamId, minute) => ({
   type: 'goal', teamId, scorer: '', assister: '',
@@ -245,26 +246,28 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
                     -
                   </button>
                 </div>
-                <div className="flex justify-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => addCard(teamA, 'yellow')}
-                    data-testid="card-yellow-a"
-                    title="כרטיס צהוב"
-                    className="rounded-lg border border-yellow-400 bg-yellow-100 px-2.5 py-1 text-sm font-bold text-yellow-800 hover:bg-yellow-200"
-                  >
-                    🟨
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => addCard(teamA, 'red')}
-                    data-testid="card-red-a"
-                    title="כרטיס אדום"
-                    className="rounded-lg border border-red-400 bg-red-100 px-2.5 py-1 text-sm font-bold text-red-800 hover:bg-red-200"
-                  >
-                    🟥
-                  </button>
-                </div>
+                {VERBOSE_BUTTON && (
+                  <div className="flex justify-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => addCard(teamA, 'yellow')}
+                      data-testid="card-yellow-a"
+                      title="כרטיס צהוב"
+                      className="rounded-lg border border-yellow-400 bg-yellow-100 px-2.5 py-1 text-sm font-bold text-yellow-800 hover:bg-yellow-200"
+                    >
+                      🟨
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addCard(teamA, 'red')}
+                      data-testid="card-red-a"
+                      title="כרטיס אדום"
+                      className="rounded-lg border border-red-400 bg-red-100 px-2.5 py-1 text-sm font-bold text-red-800 hover:bg-red-200"
+                    >
+                      🟥
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -308,32 +311,34 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
                     -
                   </button>
                 </div>
-                <div className="flex justify-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => addCard(teamB, 'yellow')}
-                    data-testid="card-yellow-b"
-                    title="כרטיס צהוב"
-                    className="rounded-lg border border-yellow-400 bg-yellow-100 px-2.5 py-1 text-sm font-bold text-yellow-800 hover:bg-yellow-200"
-                  >
-                    🟨
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => addCard(teamB, 'red')}
-                    data-testid="card-red-b"
-                    title="כרטיס אדום"
-                    className="rounded-lg border border-red-400 bg-red-100 px-2.5 py-1 text-sm font-bold text-red-800 hover:bg-red-200"
-                  >
-                    🟥
-                  </button>
-                </div>
+                {VERBOSE_BUTTON && (
+                  <div className="flex justify-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => addCard(teamB, 'yellow')}
+                      data-testid="card-yellow-b"
+                      title="כרטיס צהוב"
+                      className="rounded-lg border border-yellow-400 bg-yellow-100 px-2.5 py-1 text-sm font-bold text-yellow-800 hover:bg-yellow-200"
+                    >
+                      🟨
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addCard(teamB, 'red')}
+                      data-testid="card-red-b"
+                      title="כרטיס אדום"
+                      className="rounded-lg border border-red-400 bg-red-100 px-2.5 py-1 text-sm font-bold text-red-800 hover:bg-red-200"
+                    >
+                      🟥
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>
         </div>
 
-        {/* Timer – optional, smaller, below scores */}
+        {/* Timer – optional, smaller, below scores; hidden by default via showTimer toggle */}
         <div className="mt-3 border-t pt-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-gray-500">⏱ שעון משחק</span>
@@ -392,18 +397,20 @@ const GameInput = ({ teams, players, disabled, onSave, editingGame, onCancelEdit
       </div>
 
       {/* Optional match description */}
-      <div className="mt-3">
-        <label className="mb-1 block text-xs font-medium text-gray-500">📝 תיאור המשחק (אופציונלי)</label>
-        <textarea
-          value={matchDescription}
-          disabled={disabled}
-          onChange={(e) => setMatchDescription(e.target.value)}
-          placeholder="לדוגמה: משחק סוער עם הפיכות רבות..."
-          rows={2}
-          data-testid="game-description-input"
-          className="w-full resize-none rounded-xl border border-gray-300 p-3 text-sm disabled:opacity-50"
-        />
-      </div>
+      {VERBOSE_BUTTON && (
+        <div className="mt-3">
+          <label className="mb-1 block text-xs font-medium text-gray-500">📝 תיאור המשחק (אופציונלי)</label>
+          <textarea
+            value={matchDescription}
+            disabled={disabled}
+            onChange={(e) => setMatchDescription(e.target.value)}
+            placeholder="לדוגמה: משחק סוער עם הפיכות רבות..."
+            rows={2}
+            data-testid="game-description-input"
+            className="w-full resize-none rounded-xl border border-gray-300 p-3 text-sm disabled:opacity-50"
+          />
+        </div>
+      )}
 
       {events.length > 0 ? (
         <div className="mt-4 space-y-2">

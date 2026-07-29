@@ -85,7 +85,7 @@ const syncUrlSelection = (leagueId, tournamentId = '') => {
 }
 
 export const useTournamentEditor = (sessions, players, league) => {
-  const [selectedTournamentId, setSelectedTournamentId] = useState(() => getTournamentIdFromUrl() || sessions[0]?.id || '')
+  const [selectedTournamentId, setSelectedTournamentId] = useState(() => getTournamentIdFromUrl() || sessions[sessions.length - 1]?.id || '')
   const tournamentIdFromUrl = getTournamentIdFromUrl()
   const hasSelection = sessions.some((item) => item.id === selectedTournamentId)
   const hasUrlSelection = sessions.some((item) => item.id === tournamentIdFromUrl)
@@ -93,7 +93,7 @@ export const useTournamentEditor = (sessions, players, league) => {
     ? selectedTournamentId
     : hasUrlSelection
       ? tournamentIdFromUrl
-      : (sessions[0]?.id ?? '')
+      : (sessions[sessions.length - 1]?.id ?? '')
 
   const selectedTournament = useMemo(
     () => sessions.find((item) => item.id === resolvedTournamentId) ?? null,

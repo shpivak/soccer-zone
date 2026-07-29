@@ -8,7 +8,7 @@ import TeamBuilder from '../components/TeamBuilder'
 import TournamentTable from '../components/TournamentTable'
 import { APP_CONFIG } from '../config'
 import { useAppContext } from '../hooks/useAppContext'
-import { IS_LITE_MODE } from '../utils/storageConfig'
+import { IS_LITE_MODE, VERBOSE_BUTTON } from '../utils/storageConfig'
 import { useTournamentEditor } from '../hooks/useTournamentEditor'
 import {
   applySessionCustomNameToTeams,
@@ -742,8 +742,10 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
         {selectedTournament.games.length > 0 ? (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <ShareButton message={dayShareMsg} label="שתף תוצאות היום" name="day" />
-            <ShareButton message={combinedShareMsg} label="שתף יום + סטט׳ ליגה" name="combined" />
-            {!IS_LITE_MODE && (
+            {VERBOSE_BUTTON && (
+              <ShareButton message={combinedShareMsg} label="שתף יום + סטט׳ ליגה" name="combined" />
+            )}
+            {VERBOSE_BUTTON && !IS_LITE_MODE && (
               <button
                 type="button"
                 onClick={() => openGenerateModal('live')}
@@ -878,7 +880,7 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
           headerExtra={
             <div className="flex items-center gap-2">
               <ShareButton message={teamsShareMsg} label="שתף סגלים" name="teams" />
-              <button type="button" onClick={() => openGenerateModal('squads')} data-testid="generate-image-btn-squads" className="rounded-lg bg-purple-600 p-2 text-white hover:bg-purple-700" title="ייצר תמונת סגלים">✨</button>
+              {VERBOSE_BUTTON && <button type="button" onClick={() => openGenerateModal('squads')} data-testid="generate-image-btn-squads" className="rounded-lg bg-purple-600 p-2 text-white hover:bg-purple-700" title="ייצר תמונת סגלים">✨</button>}
               <button
                 onClick={openAddTeamForm}
                 disabled={!adminMode || addTeamFormOpen}
@@ -924,7 +926,7 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
           headerExtra={
             <div className="flex items-center gap-2">
               <ShareButton message={teamsShareMsg} label="שתף סגלים" name="teams" />
-              <button type="button" onClick={() => openGenerateModal('squads')} data-testid="generate-image-btn-squads" className="rounded-lg bg-purple-600 p-2 text-white hover:bg-purple-700" title="ייצר תמונת סגלים">✨</button>
+              {VERBOSE_BUTTON && <button type="button" onClick={() => openGenerateModal('squads')} data-testid="generate-image-btn-squads" className="rounded-lg bg-purple-600 p-2 text-white hover:bg-purple-700" title="ייצר תמונת סגלים">✨</button>}
               <button
                 onClick={openAddTeamForm}
                 disabled={!adminMode || addTeamFormOpen}
