@@ -7,6 +7,7 @@ const colorLabel = {
   black: 'שחור',
   yellow: 'צהוב',
   pink: 'ורוד',
+  green: 'ירוק',
   orange: 'כתום',
   blue: 'כחול',
   red: 'אדום',
@@ -440,6 +441,7 @@ const SelectingView = ({
   onTogglePlayerRole,
   onRemoveTeam,
   onChangeTeamName,
+  onChangeTeamColor,
 }) => {
   const [pendingAssignments, setPendingAssignments] = useState(() => computeAssignments(teams, players))
   const [hasChanges, setHasChanges] = useState(false)
@@ -563,6 +565,9 @@ const SelectingView = ({
           const count = pendingCountByTeam.get(team.id) ?? 0
           const overMax = maxPlayersPerTeam && count >= maxPlayersPerTeam
           const isEditingName = editingTeamNameId === team.id
+          const teamPlayerNames = players
+            .filter((p) => pendingAssignments.get(p.id) === team.id)
+            .map((p) => p.name)
           return (
             <div
               key={team.id}
@@ -597,6 +602,19 @@ const SelectingView = ({
                 >
                   {count}{maxPlayersPerTeam ? `/${maxPlayersPerTeam}` : ''}
                 </span>
+                {adminMode && onChangeTeamColor && !isEditingName ? (
+                  <select
+                    value={team.color}
+                    disabled={disabled}
+                    onChange={(e) => onChangeTeamColor(team.id, e.target.value)}
+                    data-testid={`team-color-select-${team.id}`}
+                    className="shrink-0 rounded-md border bg-white px-1 py-0.5 text-xs"
+                  >
+                    {APP_CONFIG.allowedTeamColors.map((c) => (
+                      <option key={c} value={c}>{colorLabel[c] ?? c}</option>
+                    ))}
+                  </select>
+                ) : null}
                 {adminMode && onChangeTeamName && !isEditingName ? (
                   <button
                     type="button"
@@ -622,6 +640,11 @@ const SelectingView = ({
                   </button>
                 ) : null}
               </div>
+              {teamPlayerNames.length > 0 && (
+                <p className="mt-1 text-xs text-gray-600 leading-snug">
+                  {teamPlayerNames.join(' · ')}
+                </p>
+              )}
             </div>
           )
         })}
@@ -881,6 +904,7 @@ const TeamBuilder = ({
           onTogglePlayerRole={onTogglePlayerRole}
           onRemoveTeam={onRemoveTeam}
           onChangeTeamName={onChangeTeamName}
+          onChangeTeamColor={onChangeTeamColor}
         />
       </div>
     )

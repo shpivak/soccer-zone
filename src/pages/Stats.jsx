@@ -5,7 +5,7 @@ import ScoreBoard from '../components/ScoreBoard'
 import ShareButton from '../components/ShareButton'
 import { APP_CONFIG } from '../config'
 import { useAppContext } from '../hooks/useAppContext'
-import { IS_LITE_MODE } from '../utils/storageConfig'
+import { IS_LITE_MODE, VERBOSE_BUTTON } from '../utils/storageConfig'
 import { getLeagueModeLabels, getLeagueTypeLabel, LEAGUE_TYPES } from '../utils/leagueUtils'
 import { calculateLeagueStandings, calculatePlayerStats, getLeaders } from '../utils/tournamentUtils'
 import { buildLeagueShareUrl, generateOverallShareMessage } from '../utils/shareUtils'
@@ -66,7 +66,7 @@ const Stats = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-              {!IS_LITE_MODE && (
+              {VERBOSE_BUTTON && !IS_LITE_MODE && (
                 <button
                   type="button"
                   onClick={() => setShowGenerateModal(true)}

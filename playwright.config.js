@@ -35,6 +35,7 @@ export default defineConfig({
     env: {
       ...process.env,
       VITE_DEFAULT_DATASET: 'test',
+      VITE_VERBOSE_BUTTON: 'true',
     },
   },
 })

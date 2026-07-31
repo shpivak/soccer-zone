@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { shareViaWhatsApp } from '../utils/shareUtils'
+import { VERBOSE_BUTTON } from '../utils/storageConfig'
 
 const WhatsAppIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
@@ -28,16 +29,18 @@ const ShareButton = ({ message, label, name = '', className = '' }) => {
   return (
     <div className={`flex items-center gap-1 ${className}`}>
       <span className="text-sm font-medium text-gray-700">{label}</span>
-      <button
-        type="button"
-        onClick={() => shareViaWhatsApp(message)}
-        disabled={!message}
-        title="שתף בוואטסאפ"
-        data-testid={name ? `share-wa-${name}` : undefined}
-        className="flex items-center justify-center rounded-lg bg-[#25D366] p-2 text-white hover:bg-[#1ebe5c] disabled:opacity-40"
-      >
-        <WhatsAppIcon />
-      </button>
+      {VERBOSE_BUTTON && (
+        <button
+          type="button"
+          onClick={() => shareViaWhatsApp(message)}
+          disabled={!message}
+          title="שתף בוואטסאפ"
+          data-testid={name ? `share-wa-${name}` : undefined}
+          className="flex items-center justify-center rounded-lg bg-[#25D366] p-2 text-white hover:bg-[#1ebe5c] disabled:opacity-40"
+        >
+          <WhatsAppIcon />
+        </button>
+      )}
       <button
         type="button"
         onClick={handleCopy}

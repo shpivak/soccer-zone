@@ -283,6 +283,8 @@ test('team builder enforces unique players, max seven players, and team color ch
   page,
 }) => {
   await enableAdminMode(page)
+  // Select the first session (team1 has 6 players without רועי בן דוד)
+  await page.getByTestId('tournament-select').selectOption('2026-03-01')
   await addPlayers(page, ['תוספת 1', 'תוספת 2'])
 
   await switchToDragMode(page)
@@ -804,6 +806,8 @@ test('regular league combined share includes all teams in standings', async ({ p
 
   await enableAdminMode(page)
   await page.getByTestId('league-select').selectOption('regular-1')
+  // Select session 1 (leagueNumber=1) so team roster editing is enabled
+  await page.getByTestId('tournament-select').selectOption('regular-1-mw1')
 
   // Add team 5 via form
   await page.getByTestId('add-regular-team').click()
