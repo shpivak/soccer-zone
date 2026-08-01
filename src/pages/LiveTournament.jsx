@@ -162,7 +162,7 @@ const BoostSyncBar = ({ classes, classId, onClassesLoad, onClassSelect, onLoad, 
         <option value="">בחר אימון... (מהיום)</option>
         {(classes ?? []).map((c) => (
           <option key={c.id} value={c.id}>
-            {dayLabel(c.start)} {timeLabel(c.start)}–{timeLabel(c.end)} | {c.title} ({c.members})
+            {dayLabel(c.start)} {timeLabel(c.start)}–{timeLabel(c.end)} | {c.title} | {c.coachName} ({c.members})
           </option>
         ))}
       </select>
