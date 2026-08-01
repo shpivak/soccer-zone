@@ -9,6 +9,7 @@ import TournamentTable from '../components/TournamentTable'
 import { APP_CONFIG } from '../config'
 import { useAppContext } from '../hooks/useAppContext'
 import { IS_LITE_MODE, VERBOSE_BUTTON } from '../utils/storageConfig'
+import { loadBoostClasses, loadBoostPlayers } from '../utils/boostService'
 import { useTournamentEditor } from '../hooks/useTournamentEditor'
 import {
   applySessionCustomNameToTeams,
@@ -135,6 +136,61 @@ const getTournamentTopStats = (games, players) => {
   return { topScorers: getTopEntries(goalCount), topAssisters: getTopEntries(assistCount) }
 }
 
+const BoostSyncBar = ({ classes, classId, onClassesLoad, onClassSelect, onLoad, loading, status }) => {
+  const timeLabel = (iso) => {
+    const d = new Date(iso)
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mm = String(d.getMinutes()).padStart(2, '0')
+    return `${hh}:${mm}`
+  }
+  const dayLabel = (iso) => {
+    const days = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש']
+    const d = new Date(iso)
+    return `יום ${days[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`
+  }
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <select
+        value={classId}
+        onMouseDown={() => { if (!classes?.length && !loading) onClassesLoad({ todayOnly: true }) }}
+        onChange={(e) => onClassSelect(e.target.value)}
+        data-testid="boost-class-select"
+        disabled={loading}
+        className="rounded-lg border px-2 py-1.5 text-sm disabled:opacity-40"
+        dir="rtl"
+      >
+        <option value="">בחר אימון... (מהיום)</option>
+        {(classes ?? []).map((c) => (
+          <option key={c.id} value={c.id}>
+            {dayLabel(c.start)} {timeLabel(c.start)}–{timeLabel(c.end)} | {c.title} | {c.coachName} ({c.members})
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={() => onLoad()}
+        disabled={loading || !classId}
+        data-testid="load-from-boost"
+        className="rounded-xl border bg-blue-50 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-100 disabled:opacity-40"
+      >
+        {loading ? '⚡ טוען...' : '⚡ סנכרן מ-Boost'}
+      </button>
+      <button
+        type="button"
+        onClick={() => onClassesLoad()}
+        disabled={loading}
+        data-testid="boost-load-classes"
+        className="rounded-xl border bg-gray-50 px-2 py-1.5 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-40"
+      >
+        {loading ? '🗓️ טוען...' : '🗓️ בחר אימון אחר'}
+      </button>
+      {status ? (
+        <span data-testid="boost-status" className={`text-sm ${status.ok ? 'text-green-700' : 'text-red-600'}`}>{status.msg}</span>
+      ) : null}
+    </div>
+  )
+}
+
 const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
   const { activeLeagueId, leagues, players, tournaments, setLeagues, setPlayers, setTournaments } = useAppContext()
   const league = leagues.find((item) => item.id === activeLeagueId) ?? null
@@ -157,6 +213,10 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
   const [addTeamFormOpen, setAddTeamFormOpen] = useState(false)
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [generateModalMode, setGenerateModalMode] = useState('live')
+  const [boostLoading, setBoostLoading] = useState(false)
+  const [boostStatus, setBoostStatus] = useState(null) // { msg, ok }
+  const [boostClasses, setBoostClasses] = useState([])
+  const [boostClassId, setBoostClassId] = useState('')
 
   const openGenerateModal = (modalMode) => {
     setGenerateModalMode(modalMode)
@@ -358,6 +418,63 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
         return { ...player, [field]: !player[field] }
       }),
     )
+  }
+
+  const handleLoadBoostClasses = async ({ todayOnly = false } = {}) => {
+    if (!adminMode || boostLoading) return
+    setBoostLoading(true)
+    setBoostStatus(null)
+    try {
+      const { classes } = await loadBoostClasses({ todayOnly })
+      setBoostClasses(classes ?? [])
+      if (classes?.length === 1) setBoostClassId(classes[0].id)
+      else setBoostClassId('')
+    } catch (err) {
+      setBoostStatus({ ok: false, msg: err.message })
+    } finally {
+      setBoostLoading(false)
+    }
+  }
+
+  const handleSelectBoostClass = async (id) => {
+    setBoostClassId(id)
+    if (!id) return
+    await handleLoadFromBoost(id)
+  }
+
+  const handleLoadFromBoost = async (classIdOverride) => {
+    const id = classIdOverride ?? boostClassId
+    if (!adminMode || boostLoading || !id) return
+    setBoostLoading(true)
+    setBoostStatus(null)
+    try {
+      const { players: boostPlayers } = await loadBoostPlayers(id)
+      // Sync: preserve existing players who attended (keep their ID/stats/team assignment),
+      // add new arrivals, drop anyone not in today's attendance.
+      const existingByName = new Map(leaguePlayers.map((p) => [p.name.trim(), p]))
+      const syncedPlayers = boostPlayers.map((bp, i) => {
+        const existing = existingByName.get(bp.name)
+        return existing ?? {
+          id: `p${Date.now()}-${i}-${bp.clientId}`,
+          name: bp.name,
+          leagueId: activeLeagueId,
+          isOffense: false,
+          isDefense: false,
+        }
+      })
+      const boostNames = new Set(boostPlayers.map((bp) => bp.name))
+      const added = boostPlayers.filter((bp) => !existingByName.has(bp.name)).length
+      const removed = leaguePlayers.filter((p) => !boostNames.has(p.name.trim())).length
+      setPlayers((current) => [
+        ...current.filter((p) => p.leagueId !== activeLeagueId),
+        ...syncedPlayers,
+      ])
+      setBoostStatus({ ok: true, msg: `${boostPlayers.length} שחקנים (${added}+ / ${removed}-)` })
+    } catch (err) {
+      setBoostStatus({ ok: false, msg: err.message })
+    } finally {
+      setBoostLoading(false)
+    }
   }
 
   const handleAddPlayer = (name, teamId = null) => {
@@ -843,6 +960,17 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
             </div>
           }
         >
+          {adminMode ? (
+            <BoostSyncBar
+              classes={boostClasses}
+              classId={boostClassId}
+              onClassesLoad={handleLoadBoostClasses}
+              onClassSelect={handleSelectBoostClass}
+              onLoad={handleLoadFromBoost}
+              loading={boostLoading}
+              status={boostStatus}
+            />
+          ) : null}
           {teamBuilderMessage ? (
             <p data-testid="team-builder-message" className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">
               {teamBuilderMessage}
@@ -892,6 +1020,17 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
             </div>
           }
         >
+          {adminMode ? (
+            <BoostSyncBar
+              classes={boostClasses}
+              classId={boostClassId}
+              onClassesLoad={handleLoadBoostClasses}
+              onClassSelect={handleSelectBoostClass}
+              onLoad={handleLoadFromBoost}
+              loading={boostLoading}
+              status={boostStatus}
+            />
+          ) : null}
           {teamBuilderMessage ? (
             <p data-testid="team-builder-message" className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">
               {teamBuilderMessage}
@@ -938,6 +1077,17 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
             </div>
           }
         >
+          {adminMode ? (
+            <BoostSyncBar
+              classes={boostClasses}
+              classId={boostClassId}
+              onClassesLoad={handleLoadBoostClasses}
+              onClassSelect={handleSelectBoostClass}
+              onLoad={handleLoadFromBoost}
+              loading={boostLoading}
+              status={boostStatus}
+            />
+          ) : null}
           {teamBuilderMessage ? (
             <p data-testid="team-builder-message" className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">
               {teamBuilderMessage}

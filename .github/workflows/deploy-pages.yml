@@ -87,6 +87,34 @@ jobs:
           SUPABASE_TEST_SCHEMA: soccerlite_test
         run: npm run lite:test:e2e
 
+  deploy-functions:
+    runs-on: ubuntu-latest
+    needs: [test-zone, test-lite]
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy boost-players edge function
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          BOOST_USERNAME: ${{ secrets.BOOST_USERNAME }}
+          BOOST_PASSWORD: ${{ secrets.BOOST_PASSWORD }}
+        run: |
+          PROJECT_REF=$(echo "$SUPABASE_URL" | sed 's|https://||' | cut -d'.' -f1)
+          supabase link --project-ref "$PROJECT_REF"
+          supabase functions deploy boost-players
+          supabase secrets set \
+            BOOST_USERNAME="$BOOST_USERNAME" \
+            BOOST_PASSWORD="$BOOST_PASSWORD"
+
   build:
     runs-on: ubuntu-latest
     needs: [test-zone, test-lite]
