@@ -1800,3 +1800,33 @@ test('AI generate image button is visible on Live page in regular mode', async (
   await page.getByTestId('league-select').selectOption('tournament-3')
   await expect(page.getByTestId('generate-image-btn-live')).toBeVisible()
 })
+
+test('Boost sync loads players from class attendance into the player list', async ({ page }) => {
+  await enableAdminMode(page)
+  // Use a fresh tournament with no existing players
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('create-tournament-empty').click()
+
+  // BoostSyncBar is visible in admin mode — click 🔄 to load today's sessions
+  const refreshBtn = page.getByTestId('boost-load-classes')
+  await expect(refreshBtn).toBeVisible()
+  await refreshBtn.click()
+
+  // Wait for the edge function to complete (button re-enables when done)
+  const classSelect = page.getByTestId('boost-class-select')
+  await expect(classSelect).toBeVisible()
+  await expect(refreshBtn).toBeEnabled({ timeout: 30000 })
+
+  // Dropdown should have at least one real option beyond the placeholder
+  const options = await classSelect.locator('option').all()
+  expect(options.length).toBeGreaterThanOrEqual(2) // placeholder + at least 1 session
+
+  // Pick the first real session — auto-loads players on select
+  const firstSessionValue = await options[1].getAttribute('value')
+  await classSelect.selectOption(firstSessionValue)
+
+  // Wait for edge function to complete — selecting triggers auto-load
+  const status = page.getByTestId('boost-status')
+  await expect(status).toBeVisible({ timeout: 30000 })
+  await expect(status).toHaveClass(/text-green-700/)
+})
