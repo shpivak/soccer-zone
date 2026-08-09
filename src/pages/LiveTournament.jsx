@@ -10,6 +10,7 @@ import { APP_CONFIG } from '../config'
 import { useAppContext } from '../hooks/useAppContext'
 import { IS_LITE_MODE, VERBOSE_BUTTON } from '../utils/storageConfig'
 import { loadBoostClasses, loadBoostPlayers } from '../utils/boostService'
+import { BOOST_BRANCHES, DEFAULT_BOOST_BRANCH_ID, guessBoostBranchId } from '../utils/boostBranches'
 import { useTournamentEditor } from '../hooks/useTournamentEditor'
 import {
   applySessionCustomNameToTeams,
@@ -136,7 +137,7 @@ const getTournamentTopStats = (games, players) => {
   return { topScorers: getTopEntries(goalCount), topAssisters: getTopEntries(assistCount) }
 }
 
-const BoostSyncBar = ({ classes, classId, onClassesLoad, onClassSelect, onLoad, loading, status }) => {
+const BoostSyncBar = ({ classes, classId, branchId, onBranchSelect, onClassesLoad, onClassSelect, onLoad, loading, status }) => {
   const timeLabel = (iso) => {
     const d = new Date(iso)
     const hh = String(d.getHours()).padStart(2, '0')
@@ -150,6 +151,18 @@ const BoostSyncBar = ({ classes, classId, onClassesLoad, onClassSelect, onLoad, 
   }
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
+      <select
+        value={branchId}
+        onChange={(e) => onBranchSelect(e.target.value)}
+        data-testid="boost-branch-select"
+        disabled={loading}
+        className="rounded-lg border px-2 py-1.5 text-sm disabled:opacity-40"
+        dir="rtl"
+      >
+        {BOOST_BRANCHES.map((b) => (
+          <option key={b.id} value={b.id}>{b.label}</option>
+        ))}
+      </select>
       <select
         value={classId}
         onMouseDown={() => { if (!classes?.length && !loading) onClassesLoad({ todayOnly: true }) }}
@@ -217,6 +230,18 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
   const [boostStatus, setBoostStatus] = useState(null) // { msg, ok }
   const [boostClasses, setBoostClasses] = useState([])
   const [boostClassId, setBoostClassId] = useState('')
+  const guessedBoostBranchId = useMemo(
+    () => guessBoostBranchId(league?.name) ?? DEFAULT_BOOST_BRANCH_ID,
+    [league?.name],
+  )
+  const [boostBranchId, setBoostBranchId] = useState(guessedBoostBranchId)
+  const [boostBranchForLeagueId, setBoostBranchForLeagueId] = useState(activeLeagueId)
+  if (boostBranchForLeagueId !== activeLeagueId) {
+    setBoostBranchForLeagueId(activeLeagueId)
+    setBoostBranchId(guessedBoostBranchId)
+    setBoostClasses([])
+    setBoostClassId('')
+  }
 
   const openGenerateModal = (modalMode) => {
     setGenerateModalMode(modalMode)
@@ -425,7 +450,7 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
     setBoostLoading(true)
     setBoostStatus(null)
     try {
-      const { classes } = await loadBoostClasses({ todayOnly })
+      const { classes } = await loadBoostClasses({ todayOnly, branchId: boostBranchId })
       setBoostClasses(classes ?? [])
       if (classes?.length === 1) setBoostClassId(classes[0].id)
       else setBoostClassId('')
@@ -434,6 +459,13 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
     } finally {
       setBoostLoading(false)
     }
+  }
+
+  const handleSelectBoostBranch = (id) => {
+    setBoostBranchId(id)
+    setBoostClasses([])
+    setBoostClassId('')
+    setBoostStatus(null)
   }
 
   const handleSelectBoostClass = async (id) => {
@@ -964,6 +996,8 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
             <BoostSyncBar
               classes={boostClasses}
               classId={boostClassId}
+              branchId={boostBranchId}
+              onBranchSelect={handleSelectBoostBranch}
               onClassesLoad={handleLoadBoostClasses}
               onClassSelect={handleSelectBoostClass}
               onLoad={handleLoadFromBoost}
@@ -1024,6 +1058,8 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
             <BoostSyncBar
               classes={boostClasses}
               classId={boostClassId}
+              branchId={boostBranchId}
+              onBranchSelect={handleSelectBoostBranch}
               onClassesLoad={handleLoadBoostClasses}
               onClassSelect={handleSelectBoostClass}
               onLoad={handleLoadFromBoost}
@@ -1081,6 +1117,8 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
             <BoostSyncBar
               classes={boostClasses}
               classId={boostClassId}
+              branchId={boostBranchId}
+              onBranchSelect={handleSelectBoostBranch}
               onClassesLoad={handleLoadBoostClasses}
               onClassSelect={handleSelectBoostClass}
               onLoad={handleLoadFromBoost}

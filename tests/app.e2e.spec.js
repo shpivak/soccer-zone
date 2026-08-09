@@ -1801,6 +1801,23 @@ test('AI generate image button is visible on Live page in regular mode', async (
   await expect(page.getByTestId('generate-image-btn-live')).toBeVisible()
 })
 
+test('Boost branch selector lists all branches and pre-selects a guess from the league name', async ({ page }) => {
+  await enableAdminMode(page)
+  // "שבת A" has no branch keyword in its name — falls back to the default branch (Sharon / Beit Berl)
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('create-tournament-empty').click()
+
+  const branchSelect = page.getByTestId('boost-branch-select')
+  await expect(branchSelect).toBeVisible()
+  await expect(branchSelect).toHaveValue('15511')
+  expect(await branchSelect.locator('option').count()).toBe(3)
+
+  // Switching branches resets any previously picked session
+  await branchSelect.selectOption('15513')
+  await expect(branchSelect).toHaveValue('15513')
+  await expect(page.getByTestId('boost-class-select')).toHaveValue('')
+})
+
 test('Boost sync loads players from class attendance into the player list', async ({ page }) => {
   await enableAdminMode(page)
   // Use a fresh tournament with no existing players
