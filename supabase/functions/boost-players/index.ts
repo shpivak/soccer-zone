@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
 const BOOST_BASE = 'https://login.boostapp.co.il'
 const BOOST_COMPANY_NUM = '601208'
+const DEFAULT_BRANCH_ID = '15511' // שרון / בית ברל
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -69,13 +70,32 @@ serve(async (req) => {
         startDate = start.toISOString().slice(0, 10)
         endDate = end.toISOString().slice(0, 10)
       }
+      const branchId: string = body.branchId || DEFAULT_BRANCH_ID
       const params = new URLSearchParams({
-        action: 'getEvents',
-        startDate,
-        endDate,
+        fun: 'GetClassesByStudioByDate',
+        branchId,
+        Locations: '',
+        Coaches: '',
+        ClassesAll: '1',
+        MeetingsAll: '1',
+        Tasks: '1',
+        Classes: '',
+        Meetings: '',
+        ViewState: 'timeGridWeek',
+        SplitView: '1',
+        TypeOfView: '2',
+        StartDate: startDate,
+        EndDate: endDate,
+        ViewDate: startDate,
+        ScreenWidth: '1440',
+        zoomValue: '2',
+        extraParams: 'true',
+        showAllCoaches: '1',
+        showAllLocations: '1',
+        blockEvents: '1',
         companyNum: BOOST_COMPANY_NUM,
       })
-      const calRes = await fetch(`${BOOST_BASE}/office/ajax/Calendar.php`, {
+      const calRes = await fetch(`${BOOST_BASE}/office/ajax/CalendarView.php`, {
         method: 'POST',
         headers: {
           'User-Agent': 'Mozilla/5.0',
@@ -86,25 +106,31 @@ serve(async (req) => {
         },
         body: params.toString(),
       })
-      const calData = await calRes.json()
-      if (!calData.success) return json({ error: calData.message ?? 'Calendar fetch failed' }, 502)
+      const calData = await calRes.json().catch(() => null)
+      if (!calData) return json({ error: 'Calendar fetch failed — unexpected response from Boost' }, 502)
+      if (calData.Status && calData.Status !== 'Success') return json({ error: calData.message ?? 'Calendar fetch failed' }, 502)
 
-      const classes = ((calData.data?.events ?? []) as Array<{
-        id: number; title: string; start: string; end: string
-        type: string; members: string; coachName: string
-      }>)
-        .filter((e) => e.type === '3')
+      // toISOString-friendly: Boost sends "YYYY-MM-DD HH:mm:ss" (space, no zone)
+      const toIso = (s: string) => s.replace(' ', 'T')
+
+      const rawEvents = (calData.Classes ?? []) as Array<{
+        id: number | string; title: string; start: string; end: string
+        type?: number | string; members?: string | number; owner?: string; isCancelled?: boolean
+      }>
+
+      const classes = rawEvents
+        .filter((e) => !e.isCancelled && Number(e.type) === 3)
         .sort((a, b) => a.start.localeCompare(b.start))
         .map((e) => ({
           id: String(e.id),
-          title: e.title.trim(),
-          start: e.start,
-          end: e.end,
-          members: Number(e.members),
-          coachName: e.coachName,
+          title: (e.title ?? '').trim(),
+          start: toIso(e.start),
+          end: toIso(e.end),
+          members: Number(e.members ?? 0),
+          coachName: e.owner ?? '',
         }))
 
-      return json({ classes, startDate, endDate, count: classes.length })
+      return json({ classes, startDate, endDate, branchId, count: classes.length })
     }
 
     // default: fetch player attendance for a specific classId

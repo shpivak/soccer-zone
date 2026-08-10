@@ -19,9 +19,9 @@ async function callEdgeFunction(body) {
   return res.json()
 }
 
-export async function loadBoostClasses({ todayOnly = false } = {}) {
-  return callEdgeFunction({ action: 'classes', scope: todayOnly ? 'today' : 'week' })
-  // returns { classes: [{id, title, start, end, members, coachName}], startDate, endDate, count }
+export async function loadBoostClasses({ todayOnly = false, branchId } = {}) {
+  return callEdgeFunction({ action: 'classes', scope: todayOnly ? 'today' : 'week', branchId })
+  // returns { classes: [{id, title, start, end, members, coachName}], startDate, endDate, branchId, count }
 }
 
 export async function loadBoostPlayers(classId = BOOST_CLASS_ID) {
