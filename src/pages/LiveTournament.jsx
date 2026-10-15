@@ -231,6 +231,9 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
   const [generateModalMode, setGenerateModalMode] = useState('live')
   const [postGameShareGameId, setPostGameShareGameId] = useState(null)
   const [postGameShareOn, setPostGameShareOn] = useState(isPostGameShareEnabled)
+  const [postGameSharePhoto, setPostGameSharePhoto] = useState(null)
+  // Game the coach went back to fix from the share window — the window reopens after that edit is saved/cancelled
+  const [postGameShareEditId, setPostGameShareEditId] = useState(null)
   const [boostLoading, setBoostLoading] = useState(false)
   const [boostStatus, setBoostStatus] = useState(null) // { msg, ok }
   const [boostClasses, setBoostClasses] = useState([])
@@ -566,7 +569,13 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
     setGameInputMessage('')
     const savedGame = { ...game, played: true }
     const isNewGame = !selectedTournament.games.some((item) => item.id === game.id)
-    if (isNewGame && !IS_LITE_MODE && isPostGameShareEnabled()) setPostGameShareGameId(game.id)
+    if (game.id === postGameShareEditId) {
+      setPostGameShareEditId(null)
+      setPostGameShareGameId(game.id)
+    } else if (isNewGame && !IS_LITE_MODE && isPostGameShareEnabled()) {
+      setPostGameSharePhoto(null)
+      setPostGameShareGameId(game.id)
+    }
     updateSelectedTournament((tournament) => {
       const exists = tournament.games.some((item) => item.id === game.id)
       if (exists) {
@@ -953,7 +962,13 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
         disabled={!isGameEditingAllowed}
         onSave={handleSaveGame}
         editingGame={editingGame}
-        onCancelEdit={() => setEditingGame(null)}
+        onCancelEdit={() => {
+          setEditingGame(null)
+          if (postGameShareEditId) {
+            setPostGameShareGameId(postGameShareEditId)
+            setPostGameShareEditId(null)
+          }
+        }}
         message={selectedTournament.locked ? 'יום המשחקים נעול. בטל נעילה לעריכה.' : gameInputMessage}
         persistKey={selectedTournament.id}
       />
@@ -973,9 +988,18 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
       ) : null}
       {postGameShareMsg ? (
         <PostGameShareModal
+          key={postGameShareMsg}
           message={postGameShareMsg}
+          photo={postGameSharePhoto}
+          onPhotoChange={setPostGameSharePhoto}
+          onEditGame={() => {
+            setEditingGame(selectedTournament.games.find((item) => item.id === postGameShareGameId) ?? null)
+            setPostGameShareEditId(postGameShareGameId)
+            setPostGameShareGameId(null)
+          }}
           onClose={() => {
             setPostGameShareGameId(null)
+            setPostGameSharePhoto(null)
             setPostGameShareOn(isPostGameShareEnabled())
           }}
         />

@@ -242,19 +242,61 @@ export const cropToPortrait = (file, { maxHeight = 1600 } = {}) =>
     img.src = url
   })
 
+const toPngBlob = (file) =>
+  new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      canvas.getContext('2d').drawImage(img, 0, 0)
+      URL.revokeObjectURL(url)
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('png failed'))), 'image/png')
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('image load failed'))
+    }
+    img.src = url
+  })
+
+/** Copies plain text to the clipboard. Returns true on success. */
+export const copyTextToClipboard = async (text) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /**
- * Shares photo + text to WhatsApp through the device share sheet (the coach picks the group).
- * The text is also copied to the clipboard, since some WhatsApp versions drop the caption when an image is attached.
- * Returns 'shared' | 'fallback' | 'cancelled'.
+ * Copies the photo (as PNG — the only image type browsers allow on the clipboard) to the clipboard,
+ * with the text alongside it, so it can be pasted straight into WhatsApp (Web/Desktop). Returns true on success.
+ */
+export const copyImageToClipboard = async (file, text = '') => {
+  if (!file || typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) return false
+  try {
+    const items = { 'image/png': toPngBlob(file) }
+    if (text) items['text/plain'] = new Blob([text], { type: 'text/plain' })
+    await navigator.clipboard.write([new ClipboardItem(items)])
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Sends photo + text to WhatsApp through the device share sheet (the coach picks the group).
+ * Where file sharing isn't available (most desktops), the photo is copied to the clipboard for pasting instead.
+ * Returns 'shared' | 'image-copied' | 'photo-downloaded' | 'text-only' | 'cancelled'.
  */
 export const sharePhotoToWhatsApp = async (file, message) => {
-  try {
-    await navigator.clipboard?.writeText(message)
-  } catch {
-    // clipboard may be unavailable (http / permissions) — sharing still works
-  }
   const data = file ? { files: [file], text: message } : { text: message }
   if (navigator.share && (!file || navigator.canShare?.(data))) {
+    // Copy the text too: some WhatsApp versions drop the caption when an image is attached
+    await copyTextToClipboard(message)
     try {
       await navigator.share(data)
       return 'shared'
@@ -262,7 +304,8 @@ export const sharePhotoToWhatsApp = async (file, message) => {
       if (error?.name === 'AbortError') return 'cancelled'
     }
   }
-  // Desktop / unsupported browsers: download the photo and open WhatsApp with the text
+  if (file && (await copyImageToClipboard(file, message))) return 'image-copied'
+  await copyTextToClipboard(message)
   if (file) {
     const link = document.createElement('a')
     link.href = URL.createObjectURL(file)
@@ -271,5 +314,5 @@ export const sharePhotoToWhatsApp = async (file, message) => {
     setTimeout(() => URL.revokeObjectURL(link.href), 1000)
   }
   window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank')
-  return 'fallback'
+  return file ? 'photo-downloaded' : 'text-only'
 }

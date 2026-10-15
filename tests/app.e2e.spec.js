@@ -1876,8 +1876,15 @@ test('after saving a game: photo window opens, crops to portrait and shares phot
 
   const modal = page.getByTestId('post-game-share-modal')
   await expect(modal).toBeVisible()
-  await expect(page.getByTestId('post-game-share-text')).toContainText('שחור 1 – 0 צהוב')
-  await expect(page.getByTestId('post-game-share-text')).toContainText('שחקן A')
+  const shareText = page.getByTestId('post-game-share-text')
+  await expect(shareText).toHaveValue(/שחור 1 – 0 צהוב/)
+  await expect(shareText).toHaveValue(/שחקן A/)
+
+  // Text is editable and can be reset back to the generated result
+  await shareText.fill('טקסט שגוי')
+  await page.getByTestId('post-game-reset-text').click()
+  await expect(shareText).toHaveValue(/שחור 1 – 0 צהוב/)
+  await shareText.fill('עדכון מאמן: שחור 1 – 0 צהוב')
 
   // Landscape 4x3 PNG — must come out portrait (3:4)
   const landscapePng = await page.evaluate(async () => {
@@ -1900,13 +1907,59 @@ test('after saving a game: photo window opens, crops to portrait and shares phot
   await page.getByTestId('post-game-send-whatsapp').click()
   await expect(page.getByTestId('post-game-share-status')).toBeVisible()
   const shared = await page.evaluate(() => window.__shared)
-  expect(shared.text).toContain('שחור 1 – 0 צהוב')
+  expect(shared.text).toBe('עדכון מאמן: שחור 1 – 0 צהוב')
   expect(shared.files).toHaveLength(1)
   expect(shared.files[0].type).toBe('image/jpeg')
+
+  // Back to fix the result: window closes, game opens for editing, and reopens (photo kept) after saving
+  await page.getByTestId('post-game-edit-game').click()
+  await expect(modal).toHaveCount(0)
+  await setScore(page, 'a', 2)
+  await page.getByTestId('event-scorer-1').selectOption({ label: 'שחקן B' })
+  await page.getByTestId('save-game-button').click()
+  await expect(modal).toBeVisible()
+  await expect(shareText).toHaveValue(/שחור 2 – 0 צהוב/)
+  await expect(page.getByTestId('post-game-photo-preview')).toBeVisible()
 
   // "Don't show again" turns the window off for the next game
   await page.getByTestId('post-game-dont-show').check()
   await modal.getByRole('button', { name: 'סגור' }).click()
   await expect(modal).toHaveCount(0)
   await expect(page.getByTestId('post-game-share-toggle')).not.toBeChecked()
+})
+
+test('post-game window without share support copies photo + text to the clipboard', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.addInitScript(() => {
+    localStorage.setItem('soccer-zone-post-game-share', 'on')
+    navigator.share = undefined
+    window.open = () => null
+  })
+  await page.reload()
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('create-tournament-empty').click()
+  await addPlayers(page, ['שחקן A', 'שחקן B', 'שחקן C', 'שחקן D'])
+  await setTeamPlayer(page, 'team1', 'שחקן A')
+  await setTeamPlayer(page, 'team1', 'שחקן B')
+  await setTeamPlayer(page, 'team2', 'שחקן C')
+  await setTeamPlayer(page, 'team2', 'שחקן D')
+  await page.getByTestId('game-team-a-select').selectOption('team1')
+  await page.getByTestId('game-team-b-select').selectOption('team2')
+  await page.getByTestId('save-game-button').click()
+
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 300
+    canvas.height = 400
+    canvas.getContext('2d').fillRect(0, 0, 300, 400)
+    return canvas.toDataURL('image/png').split(',')[1]
+  })
+  await page.getByTestId('post-game-photo-input').setInputFiles({ name: 'g.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') })
+  await expect(page.getByTestId('post-game-photo-preview')).toBeVisible()
+
+  await page.getByTestId('post-game-send-whatsapp').click()
+  await expect(page.getByTestId('post-game-share-status')).toContainText('התמונה והטקסט הועתקו')
+  const types = await page.evaluate(async () => (await navigator.clipboard.read()).flatMap((item) => item.types))
+  expect(types).toContain('image/png')
 })
