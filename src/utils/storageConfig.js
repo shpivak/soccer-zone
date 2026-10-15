@@ -67,3 +67,6 @@ export const canResetDataset = (dataset) => {
 }
 
 export const getSchemaForDataset = (dataset) => SUPABASE_SCHEMAS[resolveDataset(dataset)]
+
+/** Invite link of the coaches WhatsApp group (opened as a fallback after a game photo is shared). Kept out of the repo. */
+export const COACHES_WHATSAPP_URL = import.meta.env.VITE_COACHES_WHATSAPP_URL?.trim() ?? ''

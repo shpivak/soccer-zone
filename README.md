@@ -143,6 +143,7 @@ Browser config:
 - `VITE_COACHES=EnglishId:שםבעברית:password;...` — semicolon-separated coach credentials
 - `VITE_GEMINI_API_KEY=...` — required for AI image generation
 - `VITE_ADMIN_PASSWORD=...` — admin panel password
+- `VITE_COACHES_WHATSAPP_URL=...` — coaches WhatsApp group invite link, opened after the post-game photo is shared (optional)
 
 Script and test config:
 

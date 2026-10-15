@@ -149,6 +149,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_COACHES: ${{ secrets.VITE_COACHES }}
           VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
+          VITE_COACHES_WHATSAPP_URL: ${{ secrets.VITE_COACHES_WHATSAPP_URL }}
         run: npm run build
 
       - name: Upload Pages artifact

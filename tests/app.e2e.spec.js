@@ -102,6 +102,8 @@ test.beforeEach(async ({ page }) => {
     localStorage.setItem('soccer-zone-whats-new-seen', appVersion)
     // Bypass coach selection screen — tests run as "all leagues" identity
     localStorage.setItem('soccer-zone-coach-id', '__admin__')
+    // Post-game photo/WhatsApp window is off by default in tests; its own test turns it on
+    if (!localStorage.getItem('soccer-zone-post-game-share')) localStorage.setItem('soccer-zone-post-game-share', 'off')
   }, packageJson.version)
   await page.goto('/')
   // Dismiss What's New modal if it shows (guards against dev-server version cache mismatch)
@@ -1845,4 +1847,66 @@ test('Boost sync loads players from class attendance into the player list', asyn
     await expect(status).toBeVisible({ timeout: 30000 })
     await expect(status).toHaveClass(/text-green-700/)
   }
+})
+
+test('after saving a game: photo window opens, crops to portrait and shares photo + result to WhatsApp', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('soccer-zone-post-game-share', 'on')
+    window.__shared = null
+    navigator.canShare = () => true
+    navigator.share = async (data) => {
+      window.__shared = { text: data.text, files: (data.files ?? []).map((f) => ({ name: f.name, type: f.type })) }
+    }
+  })
+  await page.reload()
+  await enableAdminMode(page)
+  await page.getByTestId('league-select').selectOption('tournament-2')
+  await page.getByTestId('create-tournament-empty').click()
+  await addPlayers(page, ['שחקן A', 'שחקן B', 'שחקן C', 'שחקן D'])
+  await setTeamPlayer(page, 'team1', 'שחקן A')
+  await setTeamPlayer(page, 'team1', 'שחקן B')
+  await setTeamPlayer(page, 'team2', 'שחקן C')
+  await setTeamPlayer(page, 'team2', 'שחקן D')
+
+  await page.getByTestId('game-team-a-select').selectOption('team1')
+  await page.getByTestId('game-team-b-select').selectOption('team2')
+  await setScore(page, 'a', 1)
+  await page.getByTestId('event-scorer-0').selectOption({ label: 'שחקן A' })
+  await page.getByTestId('save-game-button').click()
+
+  const modal = page.getByTestId('post-game-share-modal')
+  await expect(modal).toBeVisible()
+  await expect(page.getByTestId('post-game-share-text')).toContainText('שחור 1 – 0 צהוב')
+  await expect(page.getByTestId('post-game-share-text')).toContainText('שחקן A')
+
+  // Landscape 4x3 PNG — must come out portrait (3:4)
+  const landscapePng = await page.evaluate(async () => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 400
+    canvas.height = 300
+    canvas.getContext('2d').fillRect(0, 0, 400, 300)
+    return canvas.toDataURL('image/png').split(',')[1]
+  })
+  await page.getByTestId('post-game-photo-input').setInputFiles({
+    name: 'game.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(landscapePng, 'base64'),
+  })
+  const preview = page.getByTestId('post-game-photo-preview')
+  await expect(preview).toBeVisible()
+  const ratio = await preview.evaluate((img) => img.naturalWidth / img.naturalHeight)
+  expect(ratio).toBeCloseTo(0.75, 2)
+
+  await page.getByTestId('post-game-send-whatsapp').click()
+  await expect(page.getByTestId('post-game-share-status')).toBeVisible()
+  const shared = await page.evaluate(() => window.__shared)
+  expect(shared.text).toContain('שחור 1 – 0 צהוב')
+  expect(shared.files).toHaveLength(1)
+  expect(shared.files[0].type).toBe('image/jpeg')
+
+  // "Don't show again" turns the window off for the next game
+  await page.getByTestId('post-game-dont-show').check()
+  await modal.getByRole('button', { name: 'סגור' }).click()
+  await expect(modal).toHaveCount(0)
+  await expect(page.getByTestId('post-game-share-toggle')).not.toBeChecked()
 })
