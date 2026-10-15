@@ -247,7 +247,7 @@ export const cropToPortrait = (file, { maxHeight = 1600 } = {}) =>
  * The text is also copied to the clipboard, since some WhatsApp versions drop the caption when an image is attached.
  * Returns 'shared' | 'fallback' | 'cancelled'.
  */
-export const sharePhotoToWhatsApp = async (file, message, groupUrl = '') => {
+export const sharePhotoToWhatsApp = async (file, message) => {
   try {
     await navigator.clipboard?.writeText(message)
   } catch {
@@ -270,6 +270,6 @@ export const sharePhotoToWhatsApp = async (file, message, groupUrl = '') => {
     link.click()
     setTimeout(() => URL.revokeObjectURL(link.href), 1000)
   }
-  window.open(groupUrl || `https://wa.me/?text=${encodeURIComponent(message)}`, '_blank')
+  window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank')
   return 'fallback'
 }

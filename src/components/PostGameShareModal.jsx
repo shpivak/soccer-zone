@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { cropToPortrait, sharePhotoToWhatsApp } from '../utils/shareUtils'
-import { COACHES_WHATSAPP_URL } from '../utils/storageConfig'
 import { setPostGameShareEnabled } from '../utils/postGameShare'
 
 const STATUS_TEXT = {
@@ -38,7 +37,7 @@ const PostGameShareModal = ({ message, onClose }) => {
   }
 
   const handleSend = async () => {
-    const result = await sharePhotoToWhatsApp(photo, message, COACHES_WHATSAPP_URL)
+    const result = await sharePhotoToWhatsApp(photo, message)
     if (result !== 'cancelled') setStatus(result)
   }
 
