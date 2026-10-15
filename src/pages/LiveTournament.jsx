@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import CollapsibleSection from '../components/CollapsibleSection'
 import GameInput from '../components/GameInput'
 import GenerateImageModal from '../components/GenerateImageModal'
+import PostGameShareModal from '../components/PostGameShareModal'
 import ScoreBoard from '../components/ScoreBoard'
 import ShareButton from '../components/ShareButton'
 import TeamBuilder from '../components/TeamBuilder'
@@ -28,10 +29,12 @@ import {
   getLeaders,
 } from '../utils/tournamentUtils'
 import { generateBalancedTeams } from '../utils/teamGenerator'
+import { isPostGameShareEnabled, setPostGameShareEnabled } from '../utils/postGameShare'
 import {
   buildLeagueShareUrl,
   generateCombinedShareMessage,
   generateDayShareMessage,
+  generateGameShareMessage,
   generateOverallShareMessage,
   generateTeamShareMessage,
 } from '../utils/shareUtils'
@@ -226,6 +229,11 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
   const [addTeamFormOpen, setAddTeamFormOpen] = useState(false)
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [generateModalMode, setGenerateModalMode] = useState('live')
+  const [postGameShareGameId, setPostGameShareGameId] = useState(null)
+  const [postGameShareOn, setPostGameShareOn] = useState(isPostGameShareEnabled)
+  const [postGameSharePhoto, setPostGameSharePhoto] = useState(null)
+  // Game the coach went back to fix from the share window — the window reopens after that edit is saved/cancelled
+  const [postGameShareEditId, setPostGameShareEditId] = useState(null)
   const [boostLoading, setBoostLoading] = useState(false)
   const [boostStatus, setBoostStatus] = useState(null) // { msg, ok }
   const [boostClasses, setBoostClasses] = useState([])
@@ -318,6 +326,19 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
     )
     return generateCombinedShareMessage(dayShareMsg, overallMsg)
   }, [dayShareMsg, overallStats, overallLeaders, standings, league, sessionShareUrl])
+
+  const postGameShareMsg = useMemo(() => {
+    if (!postGameShareGameId || !selectedTournament || !league) return ''
+    const game = selectedTournament.games.find((item) => item.id === postGameShareGameId)
+    return generateGameShareMessage(
+      game,
+      selectedTournament.teams,
+      leaguePlayers,
+      league.name,
+      getSessionDisplayName(selectedTournament, league),
+      league.type === LEAGUE_TYPES.friendly ? [] : standings,
+    )
+  }, [postGameShareGameId, selectedTournament, leaguePlayers, league, standings])
 
   const updateSelectedTournament = (updater) => {
     setTournaments((current) =>
@@ -547,6 +568,14 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
     if (!adminMode || !selectedTournament || !league) return
     setGameInputMessage('')
     const savedGame = { ...game, played: true }
+    const isNewGame = !selectedTournament.games.some((item) => item.id === game.id)
+    if (game.id === postGameShareEditId) {
+      setPostGameShareEditId(null)
+      setPostGameShareGameId(game.id)
+    } else if (isNewGame && !IS_LITE_MODE && isPostGameShareEnabled()) {
+      setPostGameSharePhoto(null)
+      setPostGameShareGameId(game.id)
+    }
     updateSelectedTournament((tournament) => {
       const exists = tournament.games.some((item) => item.id === game.id)
       if (exists) {
@@ -933,10 +962,48 @@ const LiveTournament = ({ adminMode, onOpenScheduleDrawer }) => {
         disabled={!isGameEditingAllowed}
         onSave={handleSaveGame}
         editingGame={editingGame}
-        onCancelEdit={() => setEditingGame(null)}
+        onCancelEdit={() => {
+          setEditingGame(null)
+          if (postGameShareEditId) {
+            setPostGameShareGameId(postGameShareEditId)
+            setPostGameShareEditId(null)
+          }
+        }}
         message={selectedTournament.locked ? 'יום המשחקים נעול. בטל נעילה לעריכה.' : gameInputMessage}
         persistKey={selectedTournament.id}
       />
+      {!IS_LITE_MODE && isGameEditingAllowed ? (
+        <label className="-mt-2 flex items-center gap-2 px-1 text-xs text-gray-500">
+          <input
+            type="checkbox"
+            checked={postGameShareOn}
+            onChange={(e) => {
+              setPostGameShareEnabled(e.target.checked)
+              setPostGameShareOn(e.target.checked)
+            }}
+            data-testid="post-game-share-toggle"
+          />
+          📸 אחרי שמירת משחק: צילום ושליחה לקבוצת המאמנים
+        </label>
+      ) : null}
+      {postGameShareMsg ? (
+        <PostGameShareModal
+          key={postGameShareMsg}
+          message={postGameShareMsg}
+          photo={postGameSharePhoto}
+          onPhotoChange={setPostGameSharePhoto}
+          onEditGame={() => {
+            setEditingGame(selectedTournament.games.find((item) => item.id === postGameShareGameId) ?? null)
+            setPostGameShareEditId(postGameShareGameId)
+            setPostGameShareGameId(null)
+          }}
+          onClose={() => {
+            setPostGameShareGameId(null)
+            setPostGameSharePhoto(null)
+            setPostGameShareOn(isPostGameShareEnabled())
+          }}
+        />
+      ) : null}
 
       {/* Live standings */}
       {league.type !== LEAGUE_TYPES.friendly ? (
