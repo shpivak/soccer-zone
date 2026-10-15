@@ -316,3 +316,62 @@ export const sharePhotoToWhatsApp = async (file, message) => {
   window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank')
   return file ? 'photo-downloaded' : 'text-only'
 }
+
+/**
+ * Draws the result text onto the bottom of the photo, so the result travels with the image even when
+ * WhatsApp drops the caption (common on iPhone when sharing an image with text). Returns a new JPEG file.
+ */
+export const overlayTextOnPhoto = (file, text) =>
+  new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      const w = img.naturalWidth
+      const h = img.naturalHeight
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0)
+      URL.revokeObjectURL(url)
+
+      const lines = text.replace(/\*/g, '').split('\n')
+      while (lines.length && !lines[lines.length - 1].trim()) lines.pop()
+      const pad = Math.round(w * 0.05)
+      // Shrink the font until the block fits in the bottom 65% of the photo
+      let fontSize = Math.round(w / 18)
+      const fits = () => {
+        ctx.font = `bold ${fontSize}px sans-serif`
+        const widest = Math.max(...lines.map((line) => ctx.measureText(line).width))
+        return widest <= w - pad * 2 && lines.length * fontSize * 1.3 + pad * 2 <= h * 0.65
+      }
+      while (fontSize > 10 && !fits()) fontSize -= 1
+      const lineHeight = Math.round(fontSize * 1.3)
+      const blockHeight = lines.length * lineHeight + pad * 2
+
+      const gradient = ctx.createLinearGradient(0, h - blockHeight - pad * 2, 0, h)
+      gradient.addColorStop(0, 'rgba(0,0,0,0)')
+      gradient.addColorStop(0.25, 'rgba(0,0,0,0.7)')
+      gradient.addColorStop(1, 'rgba(0,0,0,0.85)')
+      ctx.fillStyle = gradient
+      ctx.fillRect(0, h - blockHeight - pad * 2, w, blockHeight + pad * 2)
+
+      ctx.fillStyle = '#fff'
+      ctx.direction = 'rtl'
+      ctx.textAlign = 'right'
+      ctx.textBaseline = 'top'
+      ctx.font = `bold ${fontSize}px sans-serif`
+      lines.forEach((line, i) => ctx.fillText(line, w - pad, h - blockHeight + pad + i * lineHeight))
+
+      canvas.toBlob(
+        (blob) => (blob ? resolve(new File([blob], file.name, { type: 'image/jpeg' })) : reject(new Error('overlay failed'))),
+        'image/jpeg',
+        0.88,
+      )
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('image load failed'))
+    }
+    img.src = url
+  })

@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { copyImageToClipboard, copyTextToClipboard, cropToPortrait, sharePhotoToWhatsApp } from '../utils/shareUtils'
+import {
+  copyImageToClipboard,
+  copyTextToClipboard,
+  cropToPortrait,
+  overlayTextOnPhoto,
+  sharePhotoToWhatsApp,
+} from '../utils/shareUtils'
 import { setPostGameShareEnabled } from '../utils/postGameShare'
 
 const STATUS_TEXT = {
@@ -23,8 +29,29 @@ const PostGameShareModal = ({ message, photo, onPhotoChange, onEditGame, onClose
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [dontShowAgain, setDontShowAgain] = useState(false)
+  const [textOnPhoto, setTextOnPhoto] = useState(true)
+  const [composed, setComposed] = useState(null) // { source, text, file } — photo with the result drawn on it
 
-  const previewUrl = useMemo(() => (photo ? URL.createObjectURL(photo) : ''), [photo])
+  // Re-draw the result onto the photo (debounced while the coach is typing)
+  useEffect(() => {
+    if (!photo || !textOnPhoto) return undefined
+    let cancelled = false
+    const timer = setTimeout(() => {
+      overlayTextOnPhoto(photo, text)
+        .then((file) => !cancelled && setComposed({ source: photo, text, file }))
+        .catch(() => {})
+    }, 300)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [photo, text, textOnPhoto])
+
+  const composedReady = composed?.source === photo && composed?.text === text
+  // What actually gets sent / copied
+  const outgoingPhoto = photo && textOnPhoto ? (composedReady ? composed.file : null) : photo
+  const previewSource = photo && textOnPhoto ? (composed?.source === photo ? composed.file : null) : photo
+  const previewUrl = useMemo(() => (previewSource ? URL.createObjectURL(previewSource) : ''), [previewSource])
   useEffect(() => () => previewUrl && URL.revokeObjectURL(previewUrl), [previewUrl])
 
   const handleFile = async (event) => {
@@ -44,12 +71,12 @@ const PostGameShareModal = ({ message, photo, onPhotoChange, onEditGame, onClose
   }
 
   const handleSend = async () => {
-    const result = await sharePhotoToWhatsApp(photo, text)
+    const result = await sharePhotoToWhatsApp(outgoingPhoto, text)
     if (result !== 'cancelled') setStatus(result)
   }
 
   const handleCopyText = async () => setStatus((await copyTextToClipboard(text)) ? 'copied-text' : 'copy-failed')
-  const handleCopyImage = async () => setStatus((await copyImageToClipboard(photo)) ? 'copied-image' : 'copy-failed')
+  const handleCopyImage = async () => setStatus((await copyImageToClipboard(outgoingPhoto)) ? 'copied-image' : 'copy-failed')
 
   const handleClose = () => {
     if (dontShowAgain) setPostGameShareEnabled(false)
@@ -129,11 +156,24 @@ const PostGameShareModal = ({ message, photo, onPhotoChange, onEditGame, onClose
           {processing ? 'מעבד…' : photo ? '📸 צלם שוב' : '📸 צלם תמונה (לאורך)'}
         </button>
 
+        {photo ? (
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={textOnPhoto}
+              onChange={(e) => setTextOnPhoto(e.target.checked)}
+              data-testid="post-game-text-on-photo"
+            />
+            📝 הוסף את התוצאה על התמונה
+          </label>
+        ) : null}
+
         <button
           type="button"
           onClick={handleSend}
+          disabled={Boolean(photo) && !outgoingPhoto}
           data-testid="post-game-send-whatsapp"
-          className="rounded-xl bg-[#25D366] px-4 py-3 font-medium text-white hover:bg-[#1ebe5c]"
+          className="rounded-xl bg-[#25D366] px-4 py-3 font-medium text-white hover:bg-[#1ebe5c] disabled:opacity-40"
         >
           {photo ? 'שלח תמונה + תוצאה לוואטסאפ' : 'שלח תוצאה לוואטסאפ'}
         </button>
@@ -151,8 +191,9 @@ const PostGameShareModal = ({ message, photo, onPhotoChange, onEditGame, onClose
             <button
               type="button"
               onClick={handleCopyImage}
+              disabled={!outgoingPhoto}
               data-testid="post-game-copy-image"
-              className="flex-1 rounded-lg bg-gray-100 px-3 py-2 text-gray-700"
+              className="flex-1 rounded-lg bg-gray-100 px-3 py-2 text-gray-700 disabled:opacity-40"
             >
               🖼️ העתק תמונה
             </button>

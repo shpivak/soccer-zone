@@ -1903,6 +1903,8 @@ test('after saving a game: photo window opens, crops to portrait and shares phot
   await expect(preview).toBeVisible()
   const ratio = await preview.evaluate((img) => img.naturalWidth / img.naturalHeight)
   expect(ratio).toBeCloseTo(0.75, 2)
+  // Result is drawn onto the photo by default (WhatsApp may drop the caption)
+  await expect(page.getByTestId('post-game-text-on-photo')).toBeChecked()
 
   await page.getByTestId('post-game-send-whatsapp').click()
   await expect(page.getByTestId('post-game-share-status')).toBeVisible()
